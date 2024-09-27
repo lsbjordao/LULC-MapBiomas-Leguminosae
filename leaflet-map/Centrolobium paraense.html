@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.7.1/dist/leaflet.css" />
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.7.1/dist/leaflet.js"></script>
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-minimap@3.6.1/dist/Control.MiniMap.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-minimap@3.6.1/dist/Control.MiniMap.min.js"></script>
+
+    <style>
+        /* Style the div that will contain the map */
+        #map {
+            height: 95vh;
+            /* 80% of the viewport height */
+            width: 95vw;
+            /* 90% of the viewport width */
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Create a div to hold the map -->
+    <div id="map"></div>
+
+    <script>
+        function initializeMap(speciesData, AOOgeometry, EOOgeometry, EOOmapBiomas, AOOmapBiomas) { // , AOOproportion
+            const worldImagery = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 19,
+                attribution: '&copy; <a href="http://www.arcgisonline.com">World Imagery</a>'
+            });
+
+            const map = L.map('map', {
+                layers: [worldImagery]
+            });
+
+            const records = L.geoJson(speciesData, {
+                onEachFeature: function (feature, layer) {
+                    const popupContent = [];
+                    for (const key in feature.properties) {
+                        popupContent.push(key + ": " + feature.properties[key]);
+                    }
+                    layer.bindPopup(popupContent.join("<br>"));
+                }
+            });
+
+            const layerAoo = L.geoJson().addTo(map);
+            layerAoo.addData(AOOgeometry)
+            layerAoo.setStyle({ fillOpacity: 0, color: 'black' });
+
+            const layerAOOmapBiomas = L.tileLayer(AOOmapBiomas.urlFormat).addTo(map);
+
+            const baseMaps = {
+                "World Imagery": worldImagery
+            };
+
+            let hasEoo = true;
+            if (EOOgeometry.features[0] === null) {
+                hasEoo = false;
+            }
+
+            let layerEoo;
+            let layerEOOmapBiomas;
+            if (hasEoo === true) {
+                layerEoo = L.geoJson().addTo(map);
+                layerEoo.addData(EOOgeometry)
+                layerEoo.setStyle({ fillOpacity: 0, color: 'black' });
+
+                layerEOOmapBiomas = L.tileLayer(EOOmapBiomas.urlFormat).addTo(map);
+            }
+
+            // const layerAooProportion = L.geoJson().addTo(map);
+            // layerAooProportion.addData(AOOproportion);
+            // layerAooProportion.setStyle({ fillOpacity: 0, color: 'blue' });
+
+            // layerAooProportion.eachLayer(function (layer) {
+            //     const feature = layer.feature;
+            //     const popupContent = "Anthropic km2: " + feature.properties[36].areaKm2.anthropic;
+            //     layer.bindPopup(popupContent);
+            // });
+
+            let overlayMaps;
+            if (hasEoo === true) {
+                overlayMaps = {
+                    "Coletas": records,
+                    "EOO": layerEoo,
+                    "AOO": layerAoo,
+                    "EOO MapBiomas": layerEOOmapBiomas,
+                    "AOO MapBiomas": layerAOOmapBiomas,
+                };
+            } else {
+                overlayMaps = {
+                    "Coletas": records,
+                    "AOO": layerAoo
+                };
+            }
+
+            L.control.layers(baseMaps, overlayMaps).addTo(map);
+
+            // Calculate the bounds of the coordinates and fit the map view
+            const allLayers = [records, layerAoo];
+            const allPoints = allLayers.reduce((acc, layer) => acc.concat(layer.getLayers()), []);
+            if (allPoints.length > 0) {
+                const group = new L.featureGroup(allPoints);
+                map.fitBounds(group.getBounds());
+            }
+
+            // Create the MiniMap layer using the worldImagery tileLayer as the main map
+            const miniMapLayer = L.tileLayer(
+                'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                {
+                    maxZoom: 19,
+                    attribution: '&copy; <a href="http://www.arcgisonline.com">World Imagery</a>',
+                }
+            );
+
+            // Create the MiniMap control and add it to the main map
+            const miniMap = new L.Control.MiniMap(miniMapLayer).addTo(map);
+        }
+
+        const speciesData = JSON.parse('[{"type":"Feature","geometry":{"type":"Point","coordinates":[-61.8333333333,3.58333333333]},"properties":{}},{"type":"Feature","geometry":{"type":"Point","coordinates":[-61.688409,3.418861]},"properties":{}},{"type":"Feature","geometry":{"type":"Point","coordinates":[-62.196148,2.738501]},"properties":{}},{"type":"Feature","geometry":{"type":"Point","coordinates":[-61.688409,3.418861]},"properties":{}},{"type":"Feature","geometry":{"type":"Point","coordinates":[-61.152581,1.290818]},"properties":{}},{"type":"Feature","geometry":{"type":"Point","coordinates":[-61.229346,1.612154]},"properties":{}},{"type":"Feature","geometry":{"type":"Point","coordinates":[-61.689352,3.387506]},"properties":{}},{"type":"Feature","geometry":{"type":"Point","coordinates":[-60.783253,2.849973]},"properties":{}},{"type":"Feature","geometry":{"type":"Point","coordinates":[-60.717893,3.116637]},"properties":{}},{"type":"Feature","geometry":{"type":"Point","coordinates":[-61.3333333333,3.36666666667]},"properties":{}}]');
+        const AOOgeometry = JSON.parse('{"type":"FeatureCollection","features":[{"type":"Feature","properties":{"Cell width":"2 Km","Cell area":"4 Km2"},"geometry":{"type":"Polygon","coordinates":[[[-62.21263302161547,2.7338513866940963],[-62.21263302161547,2.751837793968587],[-62.194642174927,2.751837793968587],[-62.194642174927,2.7338513866940963],[-62.21263302161547,2.7338513866940963]]]}},{"type":"Feature","properties":{"Cell width":"2 Km","Cell area":"4 Km2"},"geometry":{"type":"Polygon","coordinates":[[[-61.8348252411576,3.579212528595156],[-61.8348252411576,3.597198935869647],[-61.81683439446913,3.597198935869647],[-61.81683439446913,3.579212528595156],[-61.8348252411576,3.579212528595156]]]}},{"type":"Feature","properties":{"Cell width":"2 Km","Cell area":"4 Km2"},"geometry":{"type":"Polygon","coordinates":[[[-61.690898467649845,3.381362048575759],[-61.690898467649845,3.39934845585025],[-61.672907620961375,3.39934845585025],[-61.672907620961375,3.381362048575759],[-61.690898467649845,3.381362048575759]]]}},{"type":"Feature","properties":{"Cell width":"2 Km","Cell area":"4 Km2"},"geometry":{"type":"Polygon","coordinates":[[[-61.690898467649845,3.4173348631247404],[-61.690898467649845,3.435321270399231],[-61.672907620961375,3.435321270399231],[-61.672907620961375,3.4173348631247404],[-61.690898467649845,3.4173348631247404]]]}},{"type":"Feature","properties":{"Cell width":"2 Km","Cell area":"4 Km2"},"geometry":{"type":"Polygon","coordinates":[[[-61.34907238056892,3.3633756413012685],[-61.34907238056892,3.381362048575759],[-61.33108153388045,3.381362048575759],[-61.33108153388045,3.3633756413012685],[-61.34907238056892,3.3633756413012685]]]}},{"type":"Feature","properties":{"Cell width":"2 Km","Cell area":"4 Km2"},"geometry":{"type":"Polygon","coordinates":[[[-61.2411273004381,1.6007077284011813],[-61.2411273004381,1.618694135675672],[-61.22313645374963,1.618694135675672],[-61.22313645374963,1.6007077284011813],[-61.2411273004381,1.6007077284011813]]]}},{"type":"Feature","properties":{"Cell width":"2 Km","Cell area":"4 Km2"},"geometry":{"type":"Polygon","coordinates":[[[-61.16916391368422,1.2769523974603458],[-61.16916391368422,1.2949388047348367],[-61.15117306699575,1.2949388047348367],[-61.15117306699575,1.2769523974603458],[-61.16916391368422,1.2769523974603458]]]}},{"type":"Feature","properties":{"Cell width":"2 Km","Cell area":"4 Km2"},"geometry":{"type":"Polygon","coordinates":[[[-60.79135613322636,2.84176983034104],[-60.79135613322636,2.8597562376155308],[-60.77336528653789,2.8597562376155308],[-60.77336528653789,2.84176983034104],[-60.79135613322636,2.84176983034104]]]}},{"type":"Feature","properties":{"Cell width":"2 Km","Cell area":"4 Km2"},"geometry":{"type":"Polygon","coordinates":[[[-60.71939274647248,3.1115659394583997],[-60.71939274647248,3.1295523467328903],[-60.70140189978401,3.1295523467328903],[-60.70140189978401,3.1115659394583997],[-60.71939274647248,3.1115659394583997]]]}}]}');
+        const EOOgeometry = JSON.parse('{"type":"FeatureCollection","features":[{"type":"Feature","properties":{"EOO":"22,570.295 Km2"},"geometry":{"type":"Polygon","coordinates":[[[-61.152581,1.290818],[-62.196148,2.738501],[-61.8333333333,3.58333333333],[-60.717893,3.116637],[-61.152581,1.290818]]]}}]}');
+        const EOOmapBiomas = JSON.parse('{"mapid":"projects/earthengine-legacy/maps/2305ee1f15f05073c8517fe26d90eca7-178e889986cba88b8938442d3dbabe52","token":"","urlFormat":"https://earthengine.googleapis.com/v1alpha/projects/earthengine-legacy/maps/2305ee1f15f05073c8517fe26d90eca7-178e889986cba88b8938442d3dbabe52/tiles/{z}/{x}/{y}"}');
+        const AOOmapBiomas = JSON.parse('{"mapid":"projects/earthengine-legacy/maps/92829caf1e1bdd21b164de833155c4e6-2351b2d6a4224644314e29c1dc33e9a7","token":"","urlFormat":"https://earthengine.googleapis.com/v1alpha/projects/earthengine-legacy/maps/92829caf1e1bdd21b164de833155c4e6-2351b2d6a4224644314e29c1dc33e9a7/tiles/{z}/{x}/{y}"}');
+        // const AOOproportion = (JSON.parse('< % - aooProportion  % >')).AOO;
+
+        initializeMap(speciesData, AOOgeometry, EOOgeometry, EOOmapBiomas, AOOmapBiomas); //, AOOproportion
+    </script>
+
+</body>
+
+</html>
