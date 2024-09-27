@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js"
+        integrity="sha256-oP6HI9z1XaZNBrJURtCoUT5SUnxFr8s3BzRl+cbzUq8=" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+</head>
+
+<style>
+    body {
+        margin: 0;
+        overflow: hidden;
+        background-color: white;
+        color: black;
+    }
+
+    body.dark-mode {
+        background-color: #1a1a1a;
+        color: white;
+    }
+
+    #d3-svg-container {
+        width: 100vw;
+        height: 100vh;
+    }
+
+    .axis text {
+        font-size: 16px;
+    }
+
+    .axis path,
+    .axis line {
+        fill: none;
+        stroke: black;
+        shape-rendering: crispEdges;
+    }
+
+    .regression-text {
+        font-size: 20px;
+        fill: black;
+    }
+
+    /* Classe personalizada para estilizar os eixos */
+    .axis-label {
+        font-size: 18px;
+    }
+</style>
+
+<body> <!-- class="dark-mode" -->
+    <svg id="d3-svg-container"></svg>
+    <script>
+        const d3A = d3;
+
+        $.getScript("https://unpkg.com/d3-regression@1.3.10/dist/d3-regression.min.js")
+            .done(function (script, textStatus) {
+                d3 = Object.assign(d3A, d3)
+
+                let data = JSON.parse('[50.39359280218643,50.171587315248445,50.2905979177149,50.97961509904838,51.365497589518995,51.48396771580332,51.76221463567676,51.95929393270412,51.72405949576764,51.181276522792125,50.697425601143,50.31813775113222,50.06894034550519,49.977475597866075,49.83949067175462,49.79301920915816,49.55301607308477,49.25096899463953,49.05650045616388,48.80052958817315,48.563201871073815,48.44703728507003,48.0069597208158,47.253091213765245,46.408155988423374,45.60920980820124,44.63124727726534,43.80507615262768,43.15957759917919,42.619790124583886,42.161186954492145,41.466411908443035,40.71272962471411,40.17686046181713,39.520164841413305,39.33398171842428,39.33556718640274]');
+                data = data.map((value, index) => [1985 + index, value]);
+
+                const margin = { top: 50, right: 50, bottom: 50, left: 100 };
+                const width = window.innerWidth - margin.left - margin.right;
+                const height = window.innerHeight - margin.top - margin.bottom;
+
+                const svg = d3.select("#d3-svg-container")
+                    .attr("width", width + margin.left + margin.right)
+                    .attr("height", height + margin.top + margin.bottom)
+                    .append("g")
+                    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+                const x = d3.scaleLinear()
+                    .range([0, width])
+                    .domain([1985, 2021]);
+
+                const xScale = d3.axisBottom(x)
+                    .tickFormat(d3.format("d"))
+                    .tickPadding(10);
+
+                svg.append("g")
+                    .attr("transform", "translate(0," + height + ")")
+                    .call(xScale)
+                    .selectAll(".tick text")
+                    .attr("class", "axis-label");
+
+                svg.append("text")
+                    .attr("transform", "rotate(-90)")
+                    .attr("y", -margin.left)
+                    .attr("x", -height / 2)
+                    .attr("dy", "1em")
+                    .style("text-anchor", "middle")
+                    .style("font-size", "24px")
+                    .text("%");
+
+                const minValue = Math.min(...data.map(a => a[1]));
+                const maxValue = Math.max(...data.map(a => a[1]));
+
+                const y = d3.scaleLinear()
+                    .range([height, 0])
+                    .domain([minValue, maxValue]);
+
+                const yScale = d3.axisLeft(y)
+                    .tickPadding(10);
+
+                svg.append("g")
+                    .call(yScale)
+                    .selectAll(".tick text")
+                    .attr("class", "axis-label")
+
+                svg.append("text")
+                    .attr("x", (width / 2))
+                    .attr("y", -30)
+                    .attr("text-anchor", "middle")
+                    .text(`Linear regression`)
+                    .attr("class", "regression-text");
+
+                svg.append("text")
+                    .attr("x", (width / 2))
+                    .attr("y", -10)
+                    .attr("text-anchor", "middle")
+                    .text(`EOO`)
+                    .attr("class", "regression-text");
+
+                svg.append("text")
+                    .attr("x", (width / 2))
+                    .attr("y", 10)
+                    .attr("text-anchor", "middle")
+                    .text(`Pasture`)
+                    .attr("class", "regression-text");
+
+                // Segundo texto com species em itálico
+                svg.append("text")
+                    .attr("x", (width / 2))
+                    .attr("y", 30)
+                    .attr("text-anchor", "middle")
+                    .attr("class", "regression-text")
+                    .append("tspan") // Adiciona species em itálico
+                    .attr("font-style", "italic")
+                    .text(`Dimorphandra exaltata`);
+
+                svg.selectAll("circle")
+                    .data(data)
+                    .enter()
+                    .append("circle")
+                    .attr("cx", d => x(d[0]))
+                    .attr("cy", d => y(d[1]))
+                    .attr("r", 4)
+                    .attr("fill", "steelblue")
+
+                linearRegression = d3.regressionLinear()
+                    .x(d => d["0"])
+                    .y(d => d["1"])
+
+                linearRegressionData = linearRegression(data)
+
+                svg.append("path")
+                    .datum(linearRegressionData)
+                    .attr("d", d3.line()
+                        .x(d => x(d[0]))
+                        .y(d => y(d[1]))
+                    )
+                    .attr("stroke", "red")
+                    .attr("stroke-width", 2)
+                    .attr("fill", "none")
+
+                svg.append("text")
+                    .attr("x", 10)
+                    .attr("y", 20)
+                    .text(`y = ${linearRegressionData.a.toFixed(2)}x + ${linearRegressionData.b.toFixed(2)}`)
+                    .attr("class", "regression-text")
+
+                svg.append("text")
+                    .attr("x", 10)
+                    .attr("y", 50)
+                    .text(`R² = ${linearRegressionData.rSquared.toFixed(5)}`)
+                    .attr("class", "regression-text")
+
+            })
+            .fail(function (jqxhr, settings, exception) {
+                console.error(exception)
+            });
+
+    </script>
+</body>
+
+</html>
