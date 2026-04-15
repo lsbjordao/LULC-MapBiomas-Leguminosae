@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Summary · Senegalia ricoae</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,opsz,wght@0,9..144,300;1,9..144,300&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d1117;--surface:#161b22;--surface2:#1c2128;--border:#21262d;
+  --accent:#3fb950;--accent2:#58a6ff;--text:#e6edf3;--muted:#7d8590;
+}
+html,body{background:var(--bg);color:var(--text);font-family:"DM Mono",monospace;font-size:12px;height:100%}
+.page{padding:22px 24px 34px;max-width:1180px;margin:0 auto}
+h1{font-family:"Fraunces",serif;font-size:22px;font-style:italic;font-weight:300;color:var(--accent);margin-bottom:6px}
+.subtitle{font-size:11px;color:var(--muted);margin-bottom:22px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:22px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px 18px;overflow:hidden}
+.card-title{font-size:9px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);margin-bottom:12px}
+.controls{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+.controls select{background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:"DM Mono",monospace;font-size:10px;padding:5px 8px;border-radius:5px}
+svg text{font-family:"DM Mono",monospace;fill:var(--muted)}
+.tooltip{position:fixed;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:11px;color:var(--text);pointer-events:none;opacity:0;transition:opacity .12s;z-index:9999;white-space:nowrap;line-height:1.5}
+.section{margin-bottom:24px}
+.section-title{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+#trend-aoo,#trend-eoo,#pie-aoo,#pie-eoo{overflow-x:auto}
+#trend-aoo::-webkit-scrollbar,#trend-eoo::-webkit-scrollbar,
+#pie-aoo::-webkit-scrollbar,#pie-eoo::-webkit-scrollbar{height:3px}
+#trend-aoo::-webkit-scrollbar-track,#trend-eoo::-webkit-scrollbar-track,
+#pie-aoo::-webkit-scrollbar-track,#pie-eoo::-webkit-scrollbar-track{background:transparent}
+#trend-aoo::-webkit-scrollbar-thumb,#trend-eoo::-webkit-scrollbar-thumb,
+#pie-aoo::-webkit-scrollbar-thumb,#pie-eoo::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="section">
+    <div class="section-title">Linear regression annual rate by class</div>
+    <div class="card">
+      <div class="controls" style="margin-bottom:16px">
+        <button id="btn-species-land-cover" style="background:none;border:1px solid var(--border);border-radius:5px;color:var(--muted);font-family:'DM Mono',monospace;font-size:10px;padding:3px 9px;cursor:pointer" class="active">Land cover</button>
+        <button id="btn-species-land-use" style="background:none;border:1px solid var(--border);border-radius:5px;color:var(--muted);font-family:'DM Mono',monospace;font-size:10px;padding:3px 9px;cursor:pointer">Land use</button>
+      </div>
+
+      <div class="grid2">
+        <div>
+          <div class="card-title">AOO · km² yr⁻¹</div>
+          <div id="trend-aoo"></div>
+        </div>
+        <div>
+          <div class="card-title">EOO · km² yr⁻¹</div>
+          <div id="trend-eoo"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Composition by year</div>
+    <div class="grid2">
+      <div class="card">
+        <div class="controls">
+          <div class="card-title" style="margin:0">AOO · pie by year</div>
+          <select id="year-aoo"></select>
+        </div>
+        <div id="pie-aoo"></div>
+      </div>
+      <div class="card">
+        <div class="controls">
+          <div class="card-title" style="margin:0">EOO · pie by year</div>
+          <select id="year-eoo"></select>
+        </div>
+        <div id="pie-eoo"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="tooltip" id="tip"></div>
+
+<script>
+const SPECIES = "Senegalia ricoae";
+const TREND_AOO = [{"class":"Grassland","annualRate":0.1149,"pValue":0.0000010185,"rSquared":0.4895,"annualRateOLS":0.1149,"pValueOLS":0.0000010185,"rSquaredOLS":0.4895,"annualRateGLS":0.0875,"pValueGLS":0.0827,"ar1Phi":0.9541,"senSlope":0.1209,"mannKendallPValue":0,"mannKendallTau":0.4996},{"class":"Natural","annualRate":0.0801,"pValue":0.0000021997,"rSquared":0.4678,"annualRateOLS":0.0801,"pValueOLS":0.0000021997,"rSquaredOLS":0.4678,"annualRateGLS":0.0798,"pValueGLS":0.0038,"ar1Phi":0.6266,"senSlope":0.0851,"mannKendallPValue":0,"mannKendallTau":0.4993},{"class":"Pasture","annualRate":0.0314,"pValue":0.0298,"rSquared":0.1245,"annualRateOLS":0.0314,"pValueOLS":0.0298,"rSquaredOLS":0.1245,"annualRateGLS":0.0679,"pValueGLS":0.0632,"ar1Phi":0.904,"senSlope":0.0344,"mannKendallPValue":0.0181,"mannKendallTau":0.2688},{"class":"Other non vegetated areas","annualRate":0.0135,"pValue":0.0525,"rSquared":0.1004,"annualRateOLS":0.0135,"pValueOLS":0.0525,"rSquaredOLS":0.1004,"annualRateGLS":0.0065,"pValueGLS":0.6665,"ar1Phi":0.8056,"senSlope":-0.0109,"mannKendallPValue":0.1312,"mannKendallTau":-0.1729},{"class":"Non vegetated area","annualRate":0.0014,"pValue":0.0001,"rSquared":0.343,"annualRateOLS":0.0014,"pValueOLS":0.0001,"rSquaredOLS":0.343,"annualRateGLS":null,"pValueGLS":null,"ar1Phi":null,"senSlope":0,"mannKendallPValue":0.0004,"mannKendallTau":0.4845},{"class":"River, lake and ocean","annualRate":-0.0022,"pValue":0.0016,"rSquared":0.2454,"annualRateOLS":-0.0022,"pValueOLS":0.0016,"rSquaredOLS":0.2454,"annualRateGLS":-0.0037,"pValueGLS":0.0506,"ar1Phi":0.8528,"senSlope":0,"mannKendallPValue":0.0000017694,"mannKendallTau":-0.6146},{"class":"Savanna formation","annualRate":-0.0212,"pValue":0.7667,"rSquared":0.0025,"annualRateOLS":-0.0212,"pValueOLS":0.7667,"rSquaredOLS":0.0025,"annualRateGLS":0.0269,"pValueGLS":0.8718,"ar1Phi":0.8889,"senSlope":0.0049,"mannKendallPValue":0.8603,"mannKendallTau":0.0213},{"class":"Forest formation","annualRate":-0.0263,"pValue":0.6375,"rSquared":0.0062,"annualRateOLS":-0.0263,"pValueOLS":0.6375,"rSquaredOLS":0.0062,"annualRateGLS":-0.0433,"pValueGLS":0.734,"ar1Phi":0.8833,"senSlope":-0.0288,"mannKendallPValue":0.3011,"mannKendallTau":-0.12},{"class":"Anthropic","annualRate":-0.0801,"pValue":0.0000021997,"rSquared":0.4678,"annualRateOLS":-0.0801,"pValueOLS":0.0000021997,"rSquaredOLS":0.4678,"annualRateGLS":-0.0798,"pValueGLS":0.0038,"ar1Phi":0.6266,"senSlope":-0.0851,"mannKendallPValue":0,"mannKendallTau":-0.4993},{"class":"Mosaic of uses","annualRate":-0.1116,"pValue":0.0000037241,"rSquared":0.4525,"annualRateOLS":-0.1116,"pValueOLS":0.0000037241,"rSquaredOLS":0.4525,"annualRateGLS":-0.1336,"pValueGLS":0.006,"ar1Phi":0.7985,"senSlope":-0.1351,"mannKendallPValue":6.4087e-7,"mannKendallTau":-0.5647}];
+const TREND_EOO = [];
+const STACKED_AOO = [{"name":"Forest formation","data":[6.06,6.06,6.07,6.07,6.07,6.07,6.07,6.07,6.05,1.54,1.73,3.38,3.78,4.04,4.51,4.63,4.68,9.88,13.17,13.72,15.02,15.49,13.72,9.77,9.6,6.48,3.81,3.41,2.98,3.47,3.34,3.61,3.58,3.84,4.08,4.08,4.08,4.08],"color":"#006400"},{"name":"Savanna formation","data":[75.16,75.04,75.64,75.52,75.27,75,75.18,74.99,74.84,79.01,78.75,77.42,77.05,76.46,75.22,74.38,73.79,66.45,64.6,63.79,63.1,62.19,62.36,69.45,69.8,73.75,76.71,76.84,76.75,75.18,75.25,74.95,75.82,76.05,76.3,76.25,76.27,77.15],"color":"#00ff00"},{"name":"Grassland","data":[6.57,6.57,5.73,6.39,6.5,7.33,7.49,7.8,8.21,9.44,9.42,9.45,9.81,10.1,11,11.04,11.23,11.23,10.93,10.9,10.9,11.17,11.25,11.45,11.58,11.54,11.6,11.64,11.87,12.2,11.41,10.75,10.69,10,9.6,9.6,9.66,9.66],"color":"#B8AF4F"},{"name":"Pasture","data":[4.41,4.42,4.79,5.91,6.22,6.33,6.47,6.42,6.4,6.57,6.51,6.64,6.96,7.65,7.91,8.35,8.47,8.08,6.81,6.25,6.06,5.91,5.7,5.87,5.7,5.25,5.24,5.82,6.19,7.03,7.29,7.09,6.81,7.04,6.98,7.22,7.65,7.53],"color":"#FFD966"},{"name":"Mosaic of uses","data":[6.76,6.82,6.73,5.34,5.19,4.55,4.09,4.03,3.81,2.73,2.96,2.49,1.76,1.1,0.77,1.07,1.28,3.72,3.77,4.6,4.24,4.69,6.47,3.16,3.02,2.67,2.33,2.05,1.96,1.88,2.39,2.01,1.51,1.13,1.06,0.87,0.53,0.73],"color":"#fff3bf"},{"name":"Non vegetated area","data":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.08,0.08,0.08,0.08,0.08],"color":"#EA9999"},{"name":"Other non vegetated areas","data":[0.62,0.66,0.64,0.51,0.51,0.46,0.45,0.44,0.45,0.46,0.4,0.38,0.39,0.4,0.36,0.29,0.32,0.39,0.47,0.5,0.44,0.31,0.21,0.07,0.07,0.07,0.07,0,0,0,0.07,1.34,1.36,1.61,1.66,1.65,1.49,0.53],"color":"#ff3d3d"},{"name":"River, lake and ocean","data":[0.19,0.19,0.16,0.01,0.01,0.02,0.01,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.05,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"color":"#0000FF"}];
+const STACKED_EOO = [];
+const YEARS = [1985,1986,1987,1988,1989,1990,1991,1992,1993,1994,1995,1996,1997,1998,1999,2000,2001,2002,2003,2004,2005,2006,2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022];
+const ANTHROPIC_FIELDS = ["Anthropic","Forest plantation","Pasture","Agriculture","Temporary crop","Sugar cane","Mosaic of uses","Urban area","Mining","Aquaculture","Oil palm","Perennial crop","Soybean","Rice","Other temporary crops","Coffee","Citrus","Other perennial crops","Simple crop","Cotton"];
+const ANTHROPIC_SET = new Set(ANTHROPIC_FIELDS);
+
+const tip = document.getElementById('tip');
+function showTip(e, html) { tip.innerHTML = html; tip.style.opacity = 1; }
+document.addEventListener('mousemove', e => {
+  tip.style.left = (e.clientX + 14) + 'px';
+  tip.style.top  = (e.clientY - 10) + 'px';
+});
+function hideTip() { tip.style.opacity = 0; }
+
+function fmtRate(v) { return (v >= 0 ? '+' : '') + v.toFixed(3); }
+
+function drawTrendBars(selector, data, mode) {
+  const root = d3.select(selector);
+  root.selectAll('*').remove();
+
+  if (!data.length) {
+    root.append('p').style('color','#7d8590').style('font-size','11px').style('padding','8px').text('No data');
+    return;
+  }
+
+  const LABEL_W = 130;
+  const BAR_MAX = 110;
+  const VAL_W   = 46;
+  const W       = LABEL_W + BAR_MAX*2 + VAL_W;
+  const barH    = 15;
+  const gap     = 3;
+  const H       = data.length*(barH+gap) + 10;
+
+  const absMax  = d3.max(data, d => Math.abs(d.annualRate)) || 1;
+  const xSc     = d3.scaleLinear().domain([-absMax, absMax]).range([0, BAR_MAX*2]);
+  const zero    = xSc(0);
+
+  const svg = root.append('svg').attr('width',W).attr('height',H);
+
+  svg.append('line')
+    .attr('x1', LABEL_W + zero).attr('x2', LABEL_W + zero)
+    .attr('y1', 0).attr('y2', H)
+    .attr('stroke','#21262d').attr('stroke-width',1);
+
+  data.forEach((d,i) => {
+    const y   = i*(barH+gap);
+    const g   = svg.append('g').attr('transform','translate(0,'+y+')');
+    const bw  = Math.max(1, Math.abs(xSc(d.annualRate)-zero));
+    const bx  = d.annualRate < 0 ? LABEL_W + xSc(d.annualRate) : LABEL_W + zero;
+
+    let col;
+    if (mode === 'landUse') {
+      col = d.annualRate >= 0 ? '#cd3232' : '#3fb950';
+    } else {
+      col = d.annualRate >= 0 ? '#3fb950' : '#cd3232';
+    }
+
+    const lbl = d.class.length > 20 ? d.class.slice(0,19)+'…' : d.class;
+
+    g.append('text')
+      .attr('x', LABEL_W-6).attr('y', barH-3)
+      .attr('text-anchor','end')
+      .style('font-size','9px')
+      .style('fill','#7d8590')
+      .text(lbl);
+
+    g.append('rect')
+      .attr('x', bx).attr('y', 1)
+      .attr('width', bw).attr('height', barH-2)
+      .attr('rx', 2)
+      .attr('fill', col)
+      .attr('opacity', 0.82)
+      .style('cursor','pointer')
+      .on('mousemove', e => showTip(
+        e,
+        '<b>'+d.class+'</b><br>annual rate: '+fmtRate(d.annualRate)+' km² yr⁻¹'
+      ))
+      .on('mouseleave', hideTip);
+
+    g.append('text')
+      .attr('x', LABEL_W + BAR_MAX*2 + 4).attr('y', barH-3)
+      .style('font-size','9px')
+      .style('fill', col)
+      .text(fmtRate(d.annualRate));
+  });
+}
+
+function filterSpeciesTrendData(data, mode) {
+  const out = (data || []).filter(d => {
+    const isLandUse = ANTHROPIC_SET.has(d.class);
+    return mode === 'landUse' ? isLandUse : !isLandUse;
+  });
+
+  if (mode === 'landUse') {
+    out.sort((a,b) => b.annualRate - a.annualRate); // positivos em cima
+  } else {
+    out.sort((a,b) => a.annualRate - b.annualRate); // negativos em cima
+  }
+
+  return out;
+}
+
+function pieDataForYear(series, year) {
+  const idx = year - 1985;
+  if (!series || !series.length || idx < 0) return [];
+  return series
+    .map(s => ({
+      name: s.name,
+      value: Number(s.data[idx] ?? 0),
+      color: s.color || '#999999'
+    }))
+    .filter(d => isFinite(d.value) && d.value > 0);
+}
+
+function drawPie(selector, data, title) {
+  const root = d3.select(selector);
+  root.selectAll('*').remove();
+
+  if (!data.length) {
+    root.append('p').style('color','#7d8590').style('font-size','11px').style('padding','8px').text('No data');
+    return;
+  }
+
+  const W = 420, H = 320, R = 105, r = 0;
+  const svg = root.append('svg').attr('width', W).attr('height', H);
+  const g = svg.append('g').attr('transform', 'translate(130,160)');
+
+  const pie = d3.pie().value(d => d.value).sort(null);
+  const arc = d3.arc().innerRadius(r).outerRadius(R);
+
+  g.selectAll('path').data(pie(data)).join('path')
+    .attr('d', arc)
+    .attr('fill', d => d.data.color)
+    .attr('stroke', '#0d1117')
+    .attr('stroke-width', 1.2)
+    .style('cursor','pointer')
+    .on('mousemove', (e,d) => showTip(
+      e,
+      '<b>'+d.data.name+'</b><br>'+d.data.value.toFixed(2)+'%'
+    ))
+    .on('mouseleave', hideTip);
+
+  const lg = svg.append('g').attr('transform','translate(255,24)');
+  data.slice(0, 12).forEach((d,i) => {
+    const row = lg.append('g').attr('transform','translate(0,'+(i*20)+')');
+    row.append('rect').attr('width',10).attr('height',10).attr('rx',2).attr('fill',d.color);
+    row.append('text').attr('x',15).attr('y',9).style('font-size','9px').style('fill','#7d8590')
+      .text((d.name.length > 24 ? d.name.slice(0,23)+'…' : d.name) + ' ' + d.value.toFixed(1) + '%');
+  });
+}
+
+function populateYears(selectId) {
+  const sel = document.getElementById(selectId);
+  sel.innerHTML = '';
+  YEARS.forEach(y => {
+    const opt = document.createElement('option');
+    opt.value = y;
+    opt.textContent = y;
+    sel.appendChild(opt);
+  });
+  sel.value = YEARS[YEARS.length - 1];
+}
+
+function redrawPies() {
+  const yearAoo = Number(document.getElementById('year-aoo').value);
+  const yearEoo = Number(document.getElementById('year-eoo').value);
+
+  drawPie('#pie-aoo', pieDataForYear(STACKED_AOO, yearAoo), 'AOO');
+  drawPie('#pie-eoo', pieDataForYear(STACKED_EOO, yearEoo), 'EOO');
+}
+
+let speciesTrendMode = 'landCover';
+
+function redrawSpeciesClassCharts() {
+  const aooData = filterSpeciesTrendData(TREND_AOO, speciesTrendMode);
+  const eooData = filterSpeciesTrendData(TREND_EOO, speciesTrendMode);
+
+  drawTrendBars('#trend-aoo', aooData, speciesTrendMode);
+  drawTrendBars('#trend-eoo', eooData, speciesTrendMode);
+}
+
+document.getElementById('btn-species-land-cover').addEventListener('click', function(){
+  speciesTrendMode = 'landCover';
+  this.className = 'active';
+  this.style.background = 'var(--surface2)';
+  this.style.color = 'var(--text)';
+  this.style.borderColor = 'var(--accent2)';
+
+  const other = document.getElementById('btn-species-land-use');
+  other.className = '';
+  other.style.background = 'none';
+  other.style.color = 'var(--muted)';
+  other.style.borderColor = 'var(--border)';
+
+  redrawSpeciesClassCharts();
+});
+
+document.getElementById('btn-species-land-use').addEventListener('click', function(){
+  speciesTrendMode = 'landUse';
+  this.className = 'active';
+  this.style.background = 'var(--surface2)';
+  this.style.color = 'var(--text)';
+  this.style.borderColor = 'var(--accent2)';
+
+  const other = document.getElementById('btn-species-land-cover');
+  other.className = '';
+  other.style.background = 'none';
+  other.style.color = 'var(--muted)';
+  other.style.borderColor = 'var(--border)';
+
+  redrawSpeciesClassCharts();
+});
+
+document.getElementById('btn-species-land-cover').style.background = 'var(--surface2)';
+document.getElementById('btn-species-land-cover').style.color = 'var(--text)';
+document.getElementById('btn-species-land-cover').style.borderColor = 'var(--accent2)';
+
+redrawSpeciesClassCharts();
+
+populateYears('year-aoo');
+populateYears('year-eoo');
+document.getElementById('year-aoo').addEventListener('change', redrawPies);
+document.getElementById('year-eoo').addEventListener('change', redrawPies);
+redrawPies();
+</script>
+</body>
+</html>

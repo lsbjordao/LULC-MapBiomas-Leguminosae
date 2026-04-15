@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js"
+        integrity="sha256-oP6HI9z1XaZNBrJURtCoUT5SUnxFr8s3BzRl+cbzUq8=" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+</head>
+
+<style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { overflow: hidden; background-color: white; color: black; }
+    body.dark-mode { background-color: #1a1a1a; color: white; }
+    #d3-svg-container { display: block; width: 100%; height: 100vh; }
+    .axis text { font-size: 12px; }
+    .axis path, .axis line { fill: none; stroke: #aaa; shape-rendering: crispEdges; }
+    .axis-label { font-size: 12px; }
+    .stats-text { font-size: 12px; font-family: monospace; }
+    .panel-label { font-size: 11px; font-family: monospace; fill: #888; }
+</style>
+
+<body>
+    <svg id="d3-svg-container"></svg>
+    <script>
+        const d3A = d3;
+        let regressionLoaded = false;
+
+        $.getScript("https://unpkg.com/d3-regression@1.3.10/dist/d3-regression.min.js")
+            .done(function () {
+                d3 = Object.assign(d3A, d3);
+                regressionLoaded = true;
+                drawChart();
+                new ResizeObserver(() => drawChart()).observe(document.getElementById("d3-svg-container"));
+            })
+            .fail(function (jqxhr, settings, exception) { console.error(exception); });
+
+        // ── dados injetados pelo EJS ──────────────────────────────────────
+        const RAW_Y      = JSON.parse('[99.51513411951805,99.51115924805552,99.50960037884533,99.50440409092907,99.5026147936177,99.50290935646179,99.50369425375392,99.50034600798568,99.49817109232107,99.49946655675019,99.50271787462721,99.50183453746813,99.49613106377227,99.48904478813317,99.48702174014164,99.4905739491249,99.49166259695924,99.49125803515797,99.48732565003924,99.48775324122164,99.49034429540048,99.48881623647326,99.48860115061161,99.49118512846586,99.48965422167235,99.48700697314956,99.4872071054895,99.49058265636157,99.49217961635674,99.49090054341438,99.48628517840714,99.47770086834237,99.47955379366533,99.48370787558801,99.48558757016914,99.47133726439124,99.46114587394568,99.4050562500546]');
+        const GEOMETRY   = 'EOO';
+        const SPECIES    = 'Hymenolobium grazielanum';
+        const CLASS_NAME = 'Natural';
+        const RATES      = JSON.parse('{"class":"Natural","annualRate":-0.0012,"pValue":1.7828e-7,"rSquared":0.5356,"annualRateOLS":-0.0012,"pValueOLS":1.7828e-7,"rSquaredOLS":0.5356,"annualRateGLS":-0.0023,"pValueGLS":0.0044,"ar1Phi":0.8824,"senSlope":-0.0009,"mannKendallPValue":7.4035e-11,"mannKendallTau":-0.7383}');
+
+        // ── helpers ───────────────────────────────────────────────────────
+        function fmt(v) {
+            if (v === null || v === undefined || isNaN(v)) return 'NA';
+            if (Math.abs(v) < 0.001 && v !== 0) return v.toExponential(2);
+            return Number(v).toFixed(4);
+        }
+
+        function senLine(data, slope) {
+            const intercepts = data.map(d => d[1] - slope * d[0]);
+            intercepts.sort((a, b) => a - b);
+            const mid = Math.floor(intercepts.length / 2);
+            const intercept = intercepts.length % 2 === 0
+                ? (intercepts[mid - 1] + intercepts[mid]) / 2
+                : intercepts[mid];
+            return [[data[0][0], slope * data[0][0] + intercept],
+                    [data[data.length-1][0], slope * data[data.length-1][0] + intercept]];
+        }
+
+        function glsLine(data, slope) {
+            const n = data.length;
+            const meanX = data.reduce((s, d) => s + d[0], 0) / n;
+            const meanY = data.reduce((s, d) => s + d[1], 0) / n;
+            const intercept = meanY - slope * meanX;
+            return [[data[0][0], slope * data[0][0] + intercept],
+                    [data[data.length-1][0], slope * data[data.length-1][0] + intercept]];
+        }
+
+        function calcACF(residuals, maxLag) {
+            const n    = residuals.length;
+            const mean = residuals.reduce((s, v) => s + v, 0) / n;
+            const variance = residuals.reduce((s, v) => s + (v - mean) ** 2, 0) / n;
+            if (variance === 0) return Array(maxLag + 1).fill(0);
+            return Array.from({ length: maxLag + 1 }, (_, lag) => {
+                if (lag === 0) return 1;
+                let cov = 0;
+                for (let i = lag; i < n; i++) cov += (residuals[i] - mean) * (residuals[i - lag] - mean);
+                return (cov / n) / variance;
+            });
+        }
+
+        // ── layout ────────────────────────────────────────────────────────
+        // Divide a altura: 65% scatter | 35% (resíduos + ACF lado a lado)
+        // Painel de stats fixo à direita, compartilhado verticalmente
+
+        function drawChart() {
+            if (!regressionLoaded) return;
+
+            const svg = d3.select("#d3-svg-container");
+            svg.selectAll("*").remove();
+
+            const el     = document.getElementById("d3-svg-container");
+            const totalW = el.clientWidth;
+            const totalH = el.clientHeight;
+
+            svg.attr("width", totalW).attr("height", totalH)
+               .attr("viewBox", `0 0 ${totalW} ${totalH}`)
+               .attr("preserveAspectRatio", "xMidYMid meet");
+
+            const STATS_W  = 230;
+            const plotW    = totalW - STATS_W;
+            const topH     = Math.round(totalH * 0.65);
+            const botH     = totalH - topH;
+            const halfBotW = Math.round(plotW / 2);
+
+            const mTop  = { top: 16, right: 12, bottom: 28, left: 58 };
+            const mBot  = { top: 28, right: 12, bottom: 28, left: 58 };
+
+            const data = RAW_Y.map((v, i) => [1985 + i, v]);
+            const xDomain = [1985, 1985 + RAW_Y.length - 1];
+
+            // ── OLS ───────────────────────────────────────────────────────
+            const lrData   = d3.regressionLinear().x(d => d[0]).y(d => d[1])(data);
+            const residuals = data.map(d => ({ year: d[0], r: d[1] - (lrData.a * d[0] + lrData.b) }));
+            const MAX_LAG   = Math.min(20, Math.floor(data.length / 2));
+            const acfValues = calcACF(residuals.map(d => d.r), MAX_LAG);
+            const ciVal     = 1.96 / Math.sqrt(data.length); // intervalo de confiança 95%
+
+            // ══════════════════════════════════════════════════════════════
+            // PAINEL 1 — scatter + linhas de regressão
+            // ══════════════════════════════════════════════════════════════
+            const w1 = plotW - mTop.left - mTop.right;
+            const h1 = topH  - mTop.top  - mTop.bottom;
+
+            const g1 = svg.append("g").attr("transform", `translate(${mTop.left},${mTop.top})`);
+
+            const x1 = d3.scaleLinear().range([0, w1]).domain(xDomain);
+            const y1 = d3.scaleLinear().range([h1, 0])
+                .domain([d3.min(data, d => d[1]), d3.max(data, d => d[1])]).nice();
+
+            g1.append("g").attr("transform", `translate(0,${h1})`)
+                .call(d3.axisBottom(x1).tickFormat(d3.format("d")).ticks(8).tickPadding(6))
+                .selectAll(".tick text").attr("class", "axis-label");
+            g1.append("g").call(d3.axisLeft(y1).ticks(6).tickPadding(6))
+                .selectAll(".tick text").attr("class", "axis-label");
+
+            g1.append("text").attr("transform","rotate(-90)")
+                .attr("y", -mTop.left + 14).attr("x", -h1 / 2).attr("dy","1em")
+                .style("text-anchor","middle").attr("class","panel-label").text("%");
+
+            // linha zero (referência)
+            g1.append("line")
+                .attr("x1", 0).attr("y1", y1(0)).attr("x2", w1).attr("y2", y1(0))
+                .attr("stroke", "#ddd").attr("stroke-width", 1);
+
+            // pontos
+            g1.selectAll("circle").data(data).enter()
+                .append("circle")
+                .attr("cx", d => x1(d[0])).attr("cy", d => y1(d[1]))
+                .attr("r", 3.5).attr("fill", "#555").attr("opacity", 0.7);
+
+            // OLS
+            g1.append("path").datum(lrData)
+                .attr("d", d3.line().x(d => x1(d[0])).y(d => y1(d[1])))
+                .attr("stroke", "#e63946").attr("stroke-width", 2).attr("fill", "none");
+
+            // Sen's Slope
+            if (RATES?.senSlope != null && !isNaN(RATES.senSlope)) {
+                const pts = senLine(data, RATES.senSlope);
+                g1.append("line")
+                    .attr("x1", x1(pts[0][0])).attr("y1", y1(pts[0][1]))
+                    .attr("x2", x1(pts[1][0])).attr("y2", y1(pts[1][1]))
+                    .attr("stroke", "#2a9d8f").attr("stroke-width", 2).attr("stroke-dasharray", "6,3");
+            }
+
+            // GLS
+            if (RATES?.annualRateGLS != null && !isNaN(RATES.annualRateGLS)) {
+                const pts = glsLine(data, RATES.annualRateGLS);
+                g1.append("line")
+                    .attr("x1", x1(pts[0][0])).attr("y1", y1(pts[0][1]))
+                    .attr("x2", x1(pts[1][0])).attr("y2", y1(pts[1][1]))
+                    .attr("stroke", "#f4a261").attr("stroke-width", 2).attr("stroke-dasharray", "4,4");
+            }
+
+            // ══════════════════════════════════════════════════════════════
+            // PAINEL 2 — resíduos OLS no tempo
+            // ══════════════════════════════════════════════════════════════
+            const w2 = halfBotW - mBot.left - mBot.right;
+            const h2 = botH    - mBot.top  - mBot.bottom;
+            const offY2 = topH;
+
+            const g2 = svg.append("g").attr("transform", `translate(${mBot.left},${offY2 + mBot.top})`);
+
+            const x2 = d3.scaleLinear().range([0, w2]).domain(xDomain);
+            const rExt = d3.extent(residuals, d => d.r);
+            const rAbs = Math.max(Math.abs(rExt[0]), Math.abs(rExt[1]));
+            const y2 = d3.scaleLinear().range([h2, 0]).domain([-rAbs * 1.2, rAbs * 1.2]);
+
+            g2.append("g").attr("transform", `translate(0,${h2})`)
+                .call(d3.axisBottom(x2).tickFormat(d3.format("d")).ticks(6).tickPadding(4))
+                .selectAll(".tick text").attr("class", "axis-label");
+            g2.append("g").call(d3.axisLeft(y2).ticks(4).tickPadding(4))
+                .selectAll(".tick text").attr("class", "axis-label");
+
+            // linha zero
+            g2.append("line")
+                .attr("x1", 0).attr("y1", y2(0)).attr("x2", w2).attr("y2", y2(0))
+                .attr("stroke", "#e63946").attr("stroke-width", 1).attr("stroke-dasharray", "4,3");
+
+            // barras de resíduo
+            g2.selectAll("line.res").data(residuals).enter()
+                .append("line")
+                .attr("x1", d => x2(d.year)).attr("y1", y2(0))
+                .attr("x2", d => x2(d.year)).attr("y2", d => y2(d.r))
+                .attr("stroke", d => d.r >= 0 ? "#6baed6" : "#fc8d59")
+                .attr("stroke-width", 2).attr("opacity", 0.8);
+
+            g2.selectAll("circle.res").data(residuals).enter()
+                .append("circle")
+                .attr("cx", d => x2(d.year)).attr("cy", d => y2(d.r))
+                .attr("r", 2.5)
+                .attr("fill", d => d.r >= 0 ? "#6baed6" : "#fc8d59");
+
+            g2.append("text").attr("x", w2 / 2).attr("y", -4)
+                .style("text-anchor","middle").attr("class","panel-label")
+                .text("OLS Residuals");
+
+            // ══════════════════════════════════════════════════════════════
+            // PAINEL 3 — ACF dos resíduos
+            // ══════════════════════════════════════════════════════════════
+            const w3 = halfBotW - mBot.left - mBot.right;
+            const h3 = h2;
+            const offX3 = halfBotW;
+            const offY3 = topH;
+
+            const g3 = svg.append("g").attr("transform", `translate(${offX3 + mBot.left},${offY3 + mBot.top})`);
+
+            const lags     = acfValues.map((v, i) => ({ lag: i, acf: v })).slice(1); // remove lag 0
+            const barWidth = Math.max(2, w3 / lags.length * 0.6);
+
+            const x3 = d3.scaleLinear().range([0, w3]).domain([1, MAX_LAG]);
+            const y3 = d3.scaleLinear().range([h3, 0]).domain([-1, 1]);
+
+            g3.append("g").attr("transform", `translate(0,${h3})`)
+                .call(d3.axisBottom(x3).ticks(Math.min(MAX_LAG, 10)).tickFormat(d3.format("d")).tickPadding(4))
+                .selectAll(".tick text").attr("class", "axis-label");
+            g3.append("g").call(d3.axisLeft(y3).ticks(5).tickPadding(4))
+                .selectAll(".tick text").attr("class", "axis-label");
+
+            // linha zero
+            g3.append("line")
+                .attr("x1", 0).attr("y1", y3(0)).attr("x2", w3).attr("y2", y3(0))
+                .attr("stroke", "#aaa").attr("stroke-width", 1);
+
+            // bandas de confiança 95%
+            g3.append("rect")
+                .attr("x", 0).attr("y", y3(ciVal))
+                .attr("width", w3).attr("height", y3(-ciVal) - y3(ciVal))
+                .attr("fill", "#e8f4f8").attr("opacity", 0.6);
+            g3.append("line")
+                .attr("x1", 0).attr("y1", y3(ciVal)).attr("x2", w3).attr("y2", y3(ciVal))
+                .attr("stroke", "#74b9ff").attr("stroke-width", 1).attr("stroke-dasharray", "4,3");
+            g3.append("line")
+                .attr("x1", 0).attr("y1", y3(-ciVal)).attr("x2", w3).attr("y2", y3(-ciVal))
+                .attr("stroke", "#74b9ff").attr("stroke-width", 1).attr("stroke-dasharray", "4,3");
+
+            // barras ACF
+            g3.selectAll("rect.acf").data(lags).enter()
+                .append("rect")
+                .attr("x", d => x3(d.lag) - barWidth / 2)
+                .attr("y", d => d.acf >= 0 ? y3(d.acf) : y3(0))
+                .attr("width", barWidth)
+                .attr("height", d => Math.abs(y3(d.acf) - y3(0)))
+                .attr("fill", d => Math.abs(d.acf) > ciVal ? "#e63946" : "#adb5bd")
+                .attr("opacity", 0.85);
+
+            g3.append("text").attr("x", w3 / 2).attr("y", -4)
+                .style("text-anchor","middle").attr("class","panel-label")
+                .text("ACF of Residuals");
+
+            g3.append("text").attr("x", w3).attr("y", h3 + 24)
+                .style("text-anchor","end").attr("class","panel-label")
+                .text("lag");
+
+            // ══════════════════════════════════════════════════════════════
+            // PAINEL STATS — lado direito
+            // ══════════════════════════════════════════════════════════════
+            const gs = svg.append("g").attr("transform", `translate(${plotW + 16},20)`);
+            let py = 0;
+            const lineH = 17;
+
+            function statBlock(label, color, rows) {
+                gs.append("text").attr("x", 0).attr("y", py)
+                    .attr("class","stats-text").attr("fill", color).attr("font-weight","bold")
+                    .text(label);
+                py += lineH;
+                rows.forEach(([k, v]) => {
+                    gs.append("text").attr("x", 10).attr("y", py)
+                        .attr("class","stats-text").attr("fill","#444")
+                        .text(`${k}: ${v}`);
+                    py += lineH;
+                });
+                py += 8;
+            }
+
+            const r = RATES || {};
+            statBlock("● OLS", "#e63946", [
+                ["slope",   fmt(r.annualRateOLS)],
+                ["p-value", fmt(r.pValueOLS)],
+                ["R²",      fmt(r.rSquaredOLS)],
+            ]);
+            statBlock("● Sen's Slope", "#2a9d8f", [
+                ["slope",   fmt(r.senSlope)],
+                ["MK τ",    fmt(r.mannKendallTau)],
+                ["MK p",    fmt(r.mannKendallPValue)],
+            ]);
+            statBlock("● GLS AR(1)", "#f4a261", [
+                ["slope",   fmt(r.annualRateGLS)],
+                ["p-value", fmt(r.pValueGLS)],
+                ["φ AR1",   fmt(r.ar1Phi)],
+            ]);
+
+            // separador
+            gs.append("line")
+                .attr("x1", 0).attr("y1", py).attr("x2", STATS_W - 20).attr("y2", py)
+                .attr("stroke","#ddd").attr("stroke-width",1);
+            py += 12;
+
+            // nota dinâmica sobre ACF
+            const sigLags = lags.filter(d => Math.abs(d.acf) > ciVal).length;
+            const phi     = RATES?.ar1Phi ?? 0;
+            let acfNote, acfColor;
+
+            if (sigLags === 0) {
+                acfNote  = ["No significant autocorrelation", "OLS residuals are adequate"];
+                acfColor = "#2a9d8f";
+            } else if (sigLags <= 2 || Math.abs(phi) < 0.3) {
+                acfNote  = ["Mild autocorrelation detected", "GLS may improve estimates"];
+                acfColor = "#f4a261";
+            } else {
+                acfNote  = ["Strong autocorrelation detected", `(${sigLags} lags > 95% CI, φ=${fmt(phi)})`, "GLS preferred over OLS"];
+                acfColor = "#e63946";
+            }
+
+            acfNote.forEach(line => {
+                gs.append("text").attr("x", 0).attr("y", py)
+                    .attr("class","panel-label").attr("fill", acfColor)
+                    .text(line);
+                py += 14;
+            });
+        }
+    </script>
+</body>
+
+</html>

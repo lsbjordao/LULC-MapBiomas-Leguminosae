@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Summary · Muellera obtusa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,opsz,wght@0,9..144,300;1,9..144,300&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d1117;--surface:#161b22;--surface2:#1c2128;--border:#21262d;
+  --accent:#3fb950;--accent2:#58a6ff;--text:#e6edf3;--muted:#7d8590;
+}
+html,body{background:var(--bg);color:var(--text);font-family:"DM Mono",monospace;font-size:12px;height:100%}
+.page{padding:22px 24px 34px;max-width:1180px;margin:0 auto}
+h1{font-family:"Fraunces",serif;font-size:22px;font-style:italic;font-weight:300;color:var(--accent);margin-bottom:6px}
+.subtitle{font-size:11px;color:var(--muted);margin-bottom:22px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:22px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px 18px;overflow:hidden}
+.card-title{font-size:9px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);margin-bottom:12px}
+.controls{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+.controls select{background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:"DM Mono",monospace;font-size:10px;padding:5px 8px;border-radius:5px}
+svg text{font-family:"DM Mono",monospace;fill:var(--muted)}
+.tooltip{position:fixed;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:11px;color:var(--text);pointer-events:none;opacity:0;transition:opacity .12s;z-index:9999;white-space:nowrap;line-height:1.5}
+.section{margin-bottom:24px}
+.section-title{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+#trend-aoo,#trend-eoo,#pie-aoo,#pie-eoo{overflow-x:auto}
+#trend-aoo::-webkit-scrollbar,#trend-eoo::-webkit-scrollbar,
+#pie-aoo::-webkit-scrollbar,#pie-eoo::-webkit-scrollbar{height:3px}
+#trend-aoo::-webkit-scrollbar-track,#trend-eoo::-webkit-scrollbar-track,
+#pie-aoo::-webkit-scrollbar-track,#pie-eoo::-webkit-scrollbar-track{background:transparent}
+#trend-aoo::-webkit-scrollbar-thumb,#trend-eoo::-webkit-scrollbar-thumb,
+#pie-aoo::-webkit-scrollbar-thumb,#pie-eoo::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="section">
+    <div class="section-title">Linear regression annual rate by class</div>
+    <div class="card">
+      <div class="controls" style="margin-bottom:16px">
+        <button id="btn-species-land-cover" style="background:none;border:1px solid var(--border);border-radius:5px;color:var(--muted);font-family:'DM Mono',monospace;font-size:10px;padding:3px 9px;cursor:pointer" class="active">Land cover</button>
+        <button id="btn-species-land-use" style="background:none;border:1px solid var(--border);border-radius:5px;color:var(--muted);font-family:'DM Mono',monospace;font-size:10px;padding:3px 9px;cursor:pointer">Land use</button>
+      </div>
+
+      <div class="grid2">
+        <div>
+          <div class="card-title">AOO · km² yr⁻¹</div>
+          <div id="trend-aoo"></div>
+        </div>
+        <div>
+          <div class="card-title">EOO · km² yr⁻¹</div>
+          <div id="trend-eoo"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Composition by year</div>
+    <div class="grid2">
+      <div class="card">
+        <div class="controls">
+          <div class="card-title" style="margin:0">AOO · pie by year</div>
+          <select id="year-aoo"></select>
+        </div>
+        <div id="pie-aoo"></div>
+      </div>
+      <div class="card">
+        <div class="controls">
+          <div class="card-title" style="margin:0">EOO · pie by year</div>
+          <select id="year-eoo"></select>
+        </div>
+        <div id="pie-eoo"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="tooltip" id="tip"></div>
+
+<script>
+const SPECIES = "Muellera obtusa";
+const TREND_AOO = [{"class":"Anthropic","annualRate":0.2,"pValue":3.5127e-21,"rSquared":0.9184,"annualRateOLS":0.2,"pValueOLS":3.5127e-21,"rSquaredOLS":0.9184,"annualRateGLS":0.1998,"pValueGLS":8.0229e-11,"ar1Phi":0.8323,"senSlope":0.2112,"mannKendallPValue":9.8747e-14,"mannKendallTau":0.8435},{"class":"Pasture","annualRate":0.1894,"pValue":2.0576e-14,"rSquared":0.8068,"annualRateOLS":0.1894,"pValueOLS":2.0576e-14,"rSquaredOLS":0.8068,"annualRateGLS":0.1626,"pValueGLS":0.0021,"ar1Phi":0.9384,"senSlope":0.1923,"mannKendallPValue":4.4676e-11,"mannKendallTau":0.7468},{"class":"Urban area","annualRate":0.0814,"pValue":1.0508e-31,"rSquared":0.9787,"annualRateOLS":0.0814,"pValueOLS":1.0508e-31,"rSquaredOLS":0.9787,"annualRateGLS":0.087,"pValueGLS":5.2127e-19,"ar1Phi":0.9029,"senSlope":0.0821,"mannKendallPValue":1.0899e-18,"mannKendallTau":1},{"class":"Grassland","annualRate":0.028,"pValue":1.9818e-7,"rSquared":0.5329,"annualRateOLS":0.028,"pValueOLS":1.9818e-7,"rSquaredOLS":0.5329,"annualRateGLS":0.0264,"pValueGLS":0.0178,"ar1Phi":0.8238,"senSlope":0.027,"mannKendallPValue":0,"mannKendallTau":0.4993},{"class":"Forest plantation","annualRate":0.0137,"pValue":0.0001,"rSquared":0.335,"annualRateOLS":0.0137,"pValueOLS":0.0001,"rSquaredOLS":0.335,"annualRateGLS":0.0196,"pValueGLS":0.0303,"ar1Phi":0.9276,"senSlope":0.0032,"mannKendallPValue":0.0018,"mannKendallTau":0.3542},{"class":"Non vegetated area","annualRate":0.0121,"pValue":1.9277e-19,"rSquared":0.8982,"annualRateOLS":0.0121,"pValueOLS":1.9277e-19,"rSquaredOLS":0.8982,"annualRateGLS":0.0125,"pValueGLS":7.5305e-12,"ar1Phi":0.6154,"senSlope":0.0114,"mannKendallPValue":7.8836e-15,"mannKendallTau":0.8805},{"class":"Other temporary crops","annualRate":0.0117,"pValue":1.2195e-11,"rSquared":0.7253,"annualRateOLS":0.0117,"pValueOLS":1.2195e-11,"rSquaredOLS":0.7253,"annualRateGLS":0.0117,"pValueGLS":0.0001,"ar1Phi":0.8334,"senSlope":0.0105,"mannKendallPValue":5.0233e-9,"mannKendallTau":0.6633},{"class":"Rocky outcrop","annualRate":0.0084,"pValue":0.0001,"rSquared":0.3428,"annualRateOLS":0.0084,"pValueOLS":0.0001,"rSquaredOLS":0.3428,"annualRateGLS":0.0132,"pValueGLS":0.0074,"ar1Phi":0.7073,"senSlope":0.0068,"mannKendallPValue":0.0003,"mannKendallTau":0.4111},{"class":"Other perennial crops","annualRate":0.0072,"pValue":8.4582e-8,"rSquared":0.5541,"annualRateOLS":0.0072,"pValueOLS":8.4582e-8,"rSquaredOLS":0.5541,"annualRateGLS":0.0078,"pValueGLS":0.0029,"ar1Phi":0.8734,"senSlope":0.0076,"mannKendallPValue":2.373e-7,"mannKendallTau":0.5865},{"class":"Forest formation","annualRate":0.0049,"pValue":0.4988,"rSquared":0.0128,"annualRateOLS":0.0049,"pValueOLS":0.4988,"rSquaredOLS":0.0128,"annualRateGLS":0.0048,"pValueGLS":0.7557,"ar1Phi":0.7939,"senSlope":-0.0014,"mannKendallPValue":0.7821,"mannKendallTau":-0.0327},{"class":"Temporary crop","annualRate":0.0021,"pValue":7.0652e-12,"rSquared":0.7334,"annualRateOLS":0.0021,"pValueOLS":7.0652e-12,"rSquaredOLS":0.7334,"annualRateGLS":0.0021,"pValueGLS":0,"ar1Phi":0.7418,"senSlope":0.002,"mannKendallPValue":7.1521e-8,"mannKendallTau":0.6155},{"class":"Wetland","annualRate":0.0015,"pValue":3.7002e-13,"rSquared":0.7734,"annualRateOLS":0.0015,"pValueOLS":3.7002e-13,"rSquaredOLS":0.7734,"annualRateGLS":0.0014,"pValueGLS":0,"ar1Phi":0.7743,"senSlope":0.0014,"mannKendallPValue":7.8393e-10,"mannKendallTau":0.6975},{"class":"Cotton","annualRate":0.0000013396,"pValue":0.6226,"rSquared":0.0068,"annualRateOLS":0.0000013396,"pValueOLS":0.6226,"rSquaredOLS":0.0068,"annualRateGLS":null,"pValueGLS":null,"ar1Phi":null,"senSlope":0,"mannKendallPValue":0.6484,"mannKendallTau":0.0682},{"class":"Coffee","annualRate":-0.0012,"pValue":0.0347,"rSquared":0.118,"annualRateOLS":-0.0012,"pValueOLS":0.0347,"rSquaredOLS":0.118,"annualRateGLS":-0.0029,"pValueGLS":0.0702,"ar1Phi":0.9625,"senSlope":0.0007,"mannKendallPValue":0.1783,"mannKendallTau":0.1544},{"class":"River, lake and ocean","annualRate":-0.009,"pValue":3.1817e-9,"rSquared":0.6272,"annualRateOLS":-0.009,"pValueOLS":3.1817e-9,"rSquaredOLS":0.6272,"annualRateGLS":-0.0108,"pValueGLS":0.0033,"ar1Phi":0.8995,"senSlope":-0.0054,"mannKendallPValue":9.2761e-13,"mannKendallTau":-0.8094},{"class":"Other non vegetated areas","annualRate":-0.011,"pValue":0.0000021318,"rSquared":0.4687,"annualRateOLS":-0.011,"pValueOLS":0.0000021318,"rSquaredOLS":0.4687,"annualRateGLS":-0.0186,"pValueGLS":0.0069,"ar1Phi":0.9405,"senSlope":-0.0076,"mannKendallPValue":0.0000041983,"mannKendallTau":-0.522},{"class":"Mosaic of uses","annualRate":-0.1043,"pValue":8.6284e-9,"rSquared":0.6063,"annualRateOLS":-0.1043,"pValueOLS":8.6284e-9,"rSquaredOLS":0.6063,"annualRateGLS":-0.0891,"pValueGLS":0.073,"ar1Phi":0.9511,"senSlope":-0.1076,"mannKendallPValue":0.0000010722,"mannKendallTau":-0.5533},{"class":"Natural","annualRate":-0.2,"pValue":3.5127e-21,"rSquared":0.9184,"annualRateOLS":-0.2,"pValueOLS":3.5127e-21,"rSquaredOLS":0.9184,"annualRateGLS":-0.1998,"pValueGLS":8.0229e-11,"ar1Phi":0.8323,"senSlope":-0.2112,"mannKendallPValue":9.8747e-14,"mannKendallTau":-0.8435},{"class":"Savanna formation","annualRate":-0.2349,"pValue":1.7941e-29,"rSquared":0.9717,"annualRateOLS":-0.2349,"pValueOLS":1.7941e-29,"rSquaredOLS":0.9717,"annualRateGLS":-0.2353,"pValueGLS":5.4959e-20,"ar1Phi":0.6639,"senSlope":-0.2363,"mannKendallPValue":3.0398e-16,"mannKendallTau":-0.926}];
+const TREND_EOO = [{"class":"Pasture","annualRate":0.2338,"pValue":1.0869e-15,"rSquared":0.8358,"annualRateOLS":0.2338,"pValueOLS":1.0869e-15,"rSquaredOLS":0.8358,"annualRateGLS":0.2313,"pValueGLS":0,"ar1Phi":0.9791,"senSlope":0.2194,"mannKendallPValue":2.1104e-14,"mannKendallTau":0.8663},{"class":"Anthropic","annualRate":0.1764,"pValue":9.5284e-23,"rSquared":0.9332,"annualRateOLS":0.1764,"pValueOLS":9.5284e-23,"rSquaredOLS":0.9332,"annualRateGLS":0.1856,"pValueGLS":1.8455e-9,"ar1Phi":0.9254,"senSlope":0.1725,"mannKendallPValue":1.0499e-15,"mannKendallTau":0.909},{"class":"Forest plantation","annualRate":0.0203,"pValue":4.1055e-22,"rSquared":0.9276,"annualRateOLS":0.0203,"pValueOLS":4.1055e-22,"rSquaredOLS":0.9276,"annualRateGLS":0.0216,"pValueGLS":1.5351e-11,"ar1Phi":0.8983,"senSlope":0.0204,"mannKendallPValue":3.5461e-15,"mannKendallTau":0.8919},{"class":"Other temporary crops","annualRate":0.0157,"pValue":4.6832e-24,"rSquared":0.9435,"annualRateOLS":0.0157,"pValueOLS":4.6832e-24,"rSquaredOLS":0.9435,"annualRateGLS":0.0139,"pValueGLS":5.334e-10,"ar1Phi":0.9462,"senSlope":0.0159,"mannKendallPValue":9.9918e-18,"mannKendallTau":0.9716},{"class":"Other perennial crops","annualRate":0.0057,"pValue":4.068e-32,"rSquared":0.9798,"annualRateOLS":0.0057,"pValueOLS":4.068e-32,"rSquaredOLS":0.9798,"annualRateGLS":0.0055,"pValueGLS":3.447e-16,"ar1Phi":0.8643,"senSlope":0.0056,"mannKendallPValue":1.2427e-17,"mannKendallTau":0.9687},{"class":"Urban area","annualRate":0.0045,"pValue":1.5229e-37,"rSquared":0.9899,"annualRateOLS":0.0045,"pValueOLS":1.5229e-37,"rSquaredOLS":0.9899,"annualRateGLS":0.0047,"pValueGLS":3.0453e-23,"ar1Phi":0.9179,"senSlope":0.0043,"mannKendallPValue":1.0899e-18,"mannKendallTau":1},{"class":"Grassland","annualRate":0.0027,"pValue":0.4665,"rSquared":0.0148,"annualRateOLS":0.0027,"pValueOLS":0.4665,"rSquaredOLS":0.0148,"annualRateGLS":-0.006,"pValueGLS":0.5577,"ar1Phi":0.8709,"senSlope":0.0033,"mannKendallPValue":0.4357,"mannKendallTau":0.0896},{"class":"Non vegetated area","annualRate":0.002,"pValue":6.4639e-16,"rSquared":0.8404,"annualRateOLS":0.002,"pValueOLS":6.4639e-16,"rSquaredOLS":0.8404,"annualRateGLS":0.0017,"pValueGLS":0,"ar1Phi":0.8435,"senSlope":0.0021,"mannKendallPValue":2.5386e-13,"mannKendallTau":0.8293},{"class":"Temporary crop","annualRate":0.0016,"pValue":7.371e-15,"rSquared":0.8174,"annualRateOLS":0.0016,"pValueOLS":7.371e-15,"rSquaredOLS":0.8174,"annualRateGLS":0.0017,"pValueGLS":0.0000062036,"ar1Phi":0.9084,"senSlope":0.0011,"mannKendallPValue":3.7432e-16,"mannKendallTau":0.9232},{"class":"Rocky outcrop","annualRate":0.0009,"pValue":8.9061e-8,"rSquared":0.5528,"annualRateOLS":0.0009,"pValueOLS":8.9061e-8,"rSquaredOLS":0.5528,"annualRateGLS":0.0012,"pValueGLS":0.0005,"ar1Phi":0.7684,"senSlope":0.0007,"mannKendallPValue":2.2233e-7,"mannKendallTau":0.5875},{"class":"Soybean","annualRate":0.0008,"pValue":9.8201e-15,"rSquared":0.8145,"annualRateOLS":0.0008,"pValueOLS":9.8201e-15,"rSquaredOLS":0.8145,"annualRateGLS":0.0009,"pValueGLS":0,"ar1Phi":0.8784,"senSlope":0.0008,"mannKendallPValue":1.0716e-13,"mannKendallTau":0.8439},{"class":"Coffee","annualRate":0.0007,"pValue":8.562e-9,"rSquared":0.6064,"annualRateOLS":0.0007,"pValueOLS":8.562e-9,"rSquaredOLS":0.6064,"annualRateGLS":0.0007,"pValueGLS":0.0079,"ar1Phi":0.9355,"senSlope":0.0007,"mannKendallPValue":4.9366e-7,"mannKendallTau":0.5704},{"class":"Sugar cane","annualRate":0.0005,"pValue":3.3879e-32,"rSquared":0.98,"annualRateOLS":0.0005,"pValueOLS":3.3879e-32,"rSquaredOLS":0.98,"annualRateGLS":0.0005,"pValueGLS":4.496e-22,"ar1Phi":0.6588,"senSlope":0.0005,"mannKendallPValue":6.9579e-17,"mannKendallTau":0.9459},{"class":"Mining","annualRate":0.0003,"pValue":9.9191e-30,"rSquared":0.9726,"annualRateOLS":0.0003,"pValueOLS":9.9191e-30,"rSquaredOLS":0.9726,"annualRateGLS":0.0003,"pValueGLS":4.9131e-17,"ar1Phi":0.9352,"senSlope":0.0002,"mannKendallPValue":1.7062e-18,"mannKendallTau":0.9943},{"class":"Wetland","annualRate":0.0001,"pValue":0.0001,"rSquared":0.3534,"annualRateOLS":0.0001,"pValueOLS":0.0001,"rSquaredOLS":0.3534,"annualRateGLS":0,"pValueGLS":0.5107,"ar1Phi":0.7688,"senSlope":0.0001,"mannKendallPValue":0.0000010722,"mannKendallTau":0.5533},{"class":"Beach, dune and sand spot","annualRate":0.0001,"pValue":2.2403e-9,"rSquared":0.6343,"annualRateOLS":0.0001,"pValueOLS":2.2403e-9,"rSquaredOLS":0.6343,"annualRateGLS":0.0001,"pValueGLS":0.0001,"ar1Phi":0.6254,"senSlope":0.0001,"mannKendallPValue":1.6959e-7,"mannKendallTau":0.5932},{"class":"Citrus","annualRate":0.0000081775,"pValue":1.3926e-8,"rSquared":0.5958,"annualRateOLS":0.0000081775,"pValueOLS":1.3926e-8,"rSquaredOLS":0.5958,"annualRateGLS":0.0000058337,"pValueGLS":0.0285,"ar1Phi":0.733,"senSlope":0.0000069206,"mannKendallPValue":1.9734e-7,"mannKendallTau":0.6211},{"class":"Perennial crop","annualRate":0.0000070517,"pValue":9.1297e-13,"rSquared":0.7618,"annualRateOLS":0.0000070517,"pValueOLS":9.1297e-13,"rSquaredOLS":0.7618,"annualRateGLS":0.0000068677,"pValueGLS":0.0000069647,"ar1Phi":0.7143,"senSlope":0.0000054315,"mannKendallPValue":3.7116e-12,"mannKendallTau":0.7934},{"class":"Oil palm","annualRate":0.0000066617,"pValue":6.5488e-17,"rSquared":0.8594,"annualRateOLS":0.0000066617,"pValueOLS":6.5488e-17,"rSquaredOLS":0.8594,"annualRateGLS":0.0000068204,"pValueGLS":8.7153e-11,"ar1Phi":0.5434,"senSlope":0.0000062894,"mannKendallPValue":2.2295e-13,"mannKendallTau":0.8414},{"class":"Non observed","annualRate":0.0000064321,"pValue":0.0001,"rSquared":0.3564,"annualRateOLS":0.0000064321,"pValueOLS":0.0001,"rSquaredOLS":0.3564,"annualRateGLS":0.000006915,"pValueGLS":0.0218,"ar1Phi":0.7192,"senSlope":0.0000065726,"mannKendallPValue":0.0002,"mannKendallTau":0.4196},{"class":"Rice","annualRate":0.0000058946,"pValue":2.4065e-8,"rSquared":0.5836,"annualRateOLS":0.0000058946,"pValueOLS":2.4065e-8,"rSquaredOLS":0.5836,"annualRateGLS":0.0000068616,"pValueGLS":0.0011,"ar1Phi":0.8013,"senSlope":0.0000050309,"mannKendallPValue":1.1075e-7,"mannKendallTau":0.6043},{"class":"Aquaculture","annualRate":0.0000047541,"pValue":0.0000023215,"rSquared":0.4663,"annualRateOLS":0.0000047541,"pValueOLS":0.0000023215,"rSquaredOLS":0.4663,"annualRateGLS":0.0000063742,"pValueGLS":0.002,"ar1Phi":0.7596,"senSlope":0.0000045507,"mannKendallPValue":0,"mannKendallTau":0.4726},{"class":"Glacier","annualRate":0.0000024936,"pValue":9.3515e-8,"rSquared":0.5516,"annualRateOLS":0.0000024936,"pValueOLS":9.3515e-8,"rSquaredOLS":0.5516,"annualRateGLS":0.0000025238,"pValueGLS":0.0002,"ar1Phi":0.504,"senSlope":0.0000023362,"mannKendallPValue":6.3771e-7,"mannKendallTau":0.5719},{"class":"Closed grassland","annualRate":3.6345e-7,"pValue":0.2308,"rSquared":0.0396,"annualRateOLS":3.6345e-7,"pValueOLS":0.2308,"rSquaredOLS":0.0396,"annualRateGLS":6.013e-7,"pValueGLS":0.2595,"ar1Phi":0.5791,"senSlope":8.0365e-10,"mannKendallPValue":0.2415,"mannKendallTau":0.1396},{"class":"Sparse natural woodlands","annualRate":3.3104e-7,"pValue":0.1807,"rSquared":0.0492,"annualRateOLS":3.3104e-7,"pValueOLS":0.1807,"rSquaredOLS":0.0492,"annualRateGLS":4.554e-7,"pValueGLS":0.2738,"ar1Phi":0.5514,"senSlope":1.8701e-8,"mannKendallPValue":0.0283,"mannKendallTau":0.2582},{"class":"Mangrove","annualRate":0,"pValue":3.2711e-7,"rSquared":0.52,"annualRateOLS":0,"pValueOLS":3.2711e-7,"rSquaredOLS":0.52,"annualRateGLS":0,"pValueGLS":0.0176,"ar1Phi":0.8418,"senSlope":0,"mannKendallPValue":3.7933e-7,"mannKendallTau":0.5761},{"class":"Flooded forest","annualRate":0,"pValue":0.0164,"rSquared":0.1498,"annualRateOLS":0,"pValueOLS":0.0164,"rSquaredOLS":0.1498,"annualRateGLS":0,"pValueGLS":0.0615,"ar1Phi":0.6804,"senSlope":0.0000080315,"mannKendallPValue":0.0921,"mannKendallTau":0.192},{"class":"Other non forest formations","annualRate":0,"pValue":2.3545e-7,"rSquared":0.5285,"annualRateOLS":0,"pValueOLS":2.3545e-7,"rSquaredOLS":0.5285,"annualRateGLS":0,"pValueGLS":0.0948,"ar1Phi":0.8153,"senSlope":0,"mannKendallPValue":0.0000029146,"mannKendallTau":0.5306},{"class":"Cotton","annualRate":0,"pValue":0.0009,"rSquared":0.2689,"annualRateOLS":0,"pValueOLS":0.0009,"rSquaredOLS":0.2689,"annualRateGLS":0,"pValueGLS":0.0002,"ar1Phi":-0.1903,"senSlope":0.000002498,"mannKendallPValue":3.8708e-7,"mannKendallTau":0.637},{"class":"Sparse grassland","annualRate":-2.3679e-7,"pValue":0.2105,"rSquared":0.0432,"annualRateOLS":-2.3679e-7,"pValueOLS":0.2105,"rSquaredOLS":0.0432,"annualRateGLS":-2.7347e-7,"pValueGLS":0.3528,"ar1Phi":0.4658,"senSlope":0,"mannKendallPValue":0.7588,"mannKendallTau":-0.0391},{"class":"Open grassland","annualRate":-2.7711e-7,"pValue":0.0994,"rSquared":0.0736,"annualRateOLS":-2.7711e-7,"pValueOLS":0.0994,"rSquaredOLS":0.0736,"annualRateGLS":-2.6129e-7,"pValueGLS":0.2221,"ar1Phi":0.2728,"senSlope":0,"mannKendallPValue":0.3499,"mannKendallTau":-0.1144},{"class":"Salt flat","annualRate":-0.0000014771,"pValue":0.143,"rSquared":0.0586,"annualRateOLS":-0.0000014771,"pValueOLS":0.143,"rSquaredOLS":0.0586,"annualRateGLS":-9.4319e-8,"pValueGLS":0.9614,"ar1Phi":0.6431,"senSlope":-0.0000018055,"mannKendallPValue":0.1745,"mannKendallTau":-0.155},{"class":"Agriculture","annualRate":-0.0001,"pValue":0,"rSquared":0.4063,"annualRateOLS":-0.0001,"pValueOLS":0,"rSquaredOLS":0.4063,"annualRateGLS":-0.0001,"pValueGLS":0.1883,"ar1Phi":0.9569,"senSlope":-0.0001,"mannKendallPValue":0.0000020124,"mannKendallTau":-0.5391},{"class":"Other non vegetated areas","annualRate":-0.0003,"pValue":0.5937,"rSquared":0.008,"annualRateOLS":-0.0003,"pValueOLS":0.5937,"rSquaredOLS":0.008,"annualRateGLS":-0.0033,"pValueGLS":0.1056,"ar1Phi":0.9493,"senSlope":0.0006,"mannKendallPValue":0.2579,"mannKendallTau":0.1294},{"class":"River, lake and ocean","annualRate":-0.007,"pValue":0.0001,"rSquared":0.3663,"annualRateOLS":-0.007,"pValueOLS":0.0001,"rSquaredOLS":0.3663,"annualRateGLS":-0.0047,"pValueGLS":0.1994,"ar1Phi":0.833,"senSlope":-0.0077,"mannKendallPValue":0.0004,"mannKendallTau":-0.4054},{"class":"Forest formation","annualRate":-0.0211,"pValue":8.3459e-9,"rSquared":0.607,"annualRateOLS":-0.0211,"pValueOLS":8.3459e-9,"rSquaredOLS":0.607,"annualRateGLS":-0.0222,"pValueGLS":0.0017,"ar1Phi":0.9724,"senSlope":-0.0208,"mannKendallPValue":0,"mannKendallTau":-0.4936},{"class":"Mosaic of uses","annualRate":-0.1076,"pValue":6.8368e-11,"rSquared":0.698,"annualRateOLS":-0.1076,"pValueOLS":6.8368e-11,"rSquaredOLS":0.698,"annualRateGLS":-0.0937,"pValueGLS":0.0061,"ar1Phi":0.9753,"senSlope":-0.1112,"mannKendallPValue":2.9575e-9,"mannKendallTau":-0.6728},{"class":"Savanna formation","annualRate":-0.1539,"pValue":8.019e-27,"rSquared":0.9603,"annualRateOLS":-0.1539,"pValueOLS":8.019e-27,"rSquaredOLS":0.9603,"annualRateGLS":-0.1527,"pValueGLS":3.6064e-15,"ar1Phi":0.8259,"senSlope":-0.1556,"mannKendallPValue":1.0499e-15,"mannKendallTau":-0.909},{"class":"Natural","annualRate":-0.1765,"pValue":9.1863e-23,"rSquared":0.9334,"annualRateOLS":-0.1765,"pValueOLS":9.1863e-23,"rSquaredOLS":0.9334,"annualRateGLS":-0.1857,"pValueGLS":1.7724e-9,"ar1Phi":0.9252,"senSlope":-0.1726,"mannKendallPValue":1.0499e-15,"mannKendallTau":-0.909}];
+const STACKED_AOO = [{"name":"Forest formation","data":[8.8,8.88,9,9.11,9.16,8.82,8.66,8.51,8.35,8.07,8.3,8.19,9.35,9.75,9.94,9.81,10.23,9.6,9.63,9.62,9.54,9.29,9.11,9.27,8.87,9.33,9.25,9.23,9.01,9.11,8.83,8.83,8.79,8.85,8.91,8.96,8.98,8.98],"color":"#006400"},{"name":"Savanna formation","data":[58.25,58.01,58.21,57.95,57.43,57.35,56.74,56.42,56.07,56.38,56.26,56.79,56.23,55.76,55.4,54.85,54.28,54.81,54.44,54.19,53.66,53.32,53.12,53.02,53.66,53.12,53.25,53.22,52.5,51.93,51.92,50.99,50.5,49.93,49.91,50,49.94,49.5],"color":"#00ff00"},{"name":"Forest plantation","data":[0.33,0.34,0.37,0.37,0.38,0.89,1.07,1.11,1.14,1.17,1.17,1.18,1.19,1.19,1.2,1.17,1.09,1.07,1.07,1.07,1.07,1.07,1.07,1.08,1.07,1.07,1.09,1.1,1.11,1.12,1.12,1.12,1.12,1.12,1.12,1.12,1.12,1.13],"color":"#ad4413"},{"name":"Wetland","data":[0.02,0.02,0.02,0.03,0.02,0.02,0.01,0.01,0.02,0.02,0.02,0.02,0.03,0.03,0.03,0.06,0.06,0.07,0.06,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.07,0.06],"color":"#45C2A5"},{"name":"Grassland","data":[1.29,1.22,1.04,0.84,0.75,0.74,1.01,1.06,1.12,1.08,1.07,1.03,1,1.31,1.38,1.47,1.52,1.16,1.08,1.1,1.12,1.21,1.31,1.58,1.6,1.45,1.33,1.01,0.97,1.17,1.13,1.75,1.96,2.26,2.2,2.19,2.19,2.2],"color":"#B8AF4F"},{"name":"Pasture","data":[19.69,19.33,20.43,21.5,21.84,22.17,22.9,23.46,23.86,24.2,24.43,24.38,23.84,23.64,23.4,23.68,23.78,23.75,23.77,23.84,24.15,24.52,24.85,24.91,25.23,25.75,26.37,27.11,27.94,27.86,27.93,27.92,28.22,28.07,27.81,27.01,25.96,25.47],"color":"#FFD966"},{"name":"Temporary crop","data":[0.01,0.01,0.01,0.01,0.01,0.01,0,0,0.01,0.01,0.01,0.01,0,0,0,0,0,0.01,0.01,0.04,0.03,0.04,0.04,0.04,0.04,0.01,0.02,0.03,0.04,0.07,0.07,0.06,0.07,0.06,0.07,0.08,0.08,0.08],"color":"#D5A6BD"},{"name":"Mosaic of uses","data":[11.37,11.25,10.11,9.28,9.63,9.32,9.04,8.91,8.71,8.11,7.49,7.01,6.72,6.69,6.97,7.19,7.1,7.45,7.7,7.66,7.94,8.02,7.87,7.47,6.92,6.7,6.09,5.62,5.58,5.83,5.84,5.98,5.9,6.09,6.03,6.4,7.46,8.16],"color":"#fff3bf"},{"name":"Non vegetated area","data":[1.98,2.1,2.07,2.13,2.18,2.13,2.05,2.03,2.08,2.17,2.23,2.28,2.28,2.3,2.25,2.25,2.29,2.29,2.31,2.33,2.33,2.33,2.33,2.33,2.33,2.32,2.36,2.35,2.38,2.43,2.44,2.46,2.47,2.51,2.45,2.49,2.47,2.49],"color":"#EA9999"},{"name":"Urban area","data":[0.78,0.85,0.88,1.04,1.13,1.3,1.34,1.48,1.63,1.68,1.79,1.84,2.09,2.16,2.31,2.34,2.41,2.45,2.49,2.52,2.54,2.57,2.6,2.61,2.65,2.75,2.86,2.96,3.11,3.21,3.29,3.33,3.4,3.53,3.68,3.89,3.92,4.1],"color":"#aa0000"},{"name":"Other non vegetated areas","data":[1.1,1.02,0.87,0.72,0.56,0.44,0.45,0.43,0.49,0.53,0.5,0.53,0.49,0.46,0.39,0.36,0.33,0.37,0.4,0.5,0.49,0.49,0.51,0.5,0.5,0.48,0.46,0.41,0.38,0.29,0.3,0.41,0.4,0.33,0.32,0.32,0.33,0.35],"color":"#ff3d3d"},{"name":"Rocky outcrop","data":[0.04,0.61,0.68,0.78,0.82,0.74,0.68,0.51,0.53,0.58,0.68,0.7,0.72,0.64,0.61,0.73,0.76,0.76,0.82,0.8,0.81,0.77,0.76,0.7,0.7,0.58,0.6,0.68,0.72,0.69,0.8,0.81,0.77,0.82,0.98,0.97,0.96,0.94],"color":"#665a3a"},{"name":"River, lake and ocean","data":[0.64,0.65,0.6,0.56,0.33,0.34,0.33,0.33,0.28,0.28,0.28,0.28,0.28,0.27,0.29,0.24,0.24,0.24,0.23,0.24,0.23,0.24,0.25,0.24,0.23,0.23,0.22,0.21,0.18,0.17,0.17,0.19,0.2,0.19,0.18,0.18,0.17,0.2],"color":"#0000FF"},{"name":"Other temporary crops","data":[0,0,0.03,0.06,0.11,0.12,0.08,0.08,0.07,0.07,0.07,0.07,0.07,0.07,0.08,0.09,0.11,0.11,0.13,0.15,0.16,0.28,0.43,0.48,0.44,0.45,0.35,0.3,0.27,0.3,0.25,0.25,0.28,0.34,0.42,0.42,0.43,0.43],"color":"#e787f8"},{"name":"Coffee","data":[0.16,0.17,0.14,0.09,0.08,0.07,0.05,0.04,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.02,0.02,0.02,0.03,0.03,0.03,0.03,0.04,0.04,0.05,0.05,0.05,0.04,0.04,0.05,0.05,0.05],"color":"#cca0d4"},{"name":"Other perennial crops","data":[0.09,0.09,0.07,0.07,0.09,0.08,0.12,0.13,0.17,0.18,0.22,0.21,0.23,0.27,0.27,0.28,0.33,0.38,0.39,0.42,0.39,0.31,0.22,0.22,0.21,0.2,0.2,0.2,0.25,0.25,0.33,0.33,0.33,0.33,0.34,0.41,0.41,0.4],"color":"#cd49e4"},{"name":"Cotton","data":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"color":"#660066"}];
+const STACKED_EOO = [{"name":"Forest formation","data":[7.99,7.93,7.87,7.85,7.77,7.74,7.67,7.56,7.48,7.31,7.31,7.3,7.29,7.29,7.26,7.17,7.14,7.1,7.07,6.96,7.01,6.98,6.98,7.02,6.97,6.98,7.02,7.06,7.08,7.12,7.1,7.14,7.14,7.17,7.15,7.13,7.16,7.16],"color":"#006400"},{"name":"Savanna formation","data":[54.85,54.85,54.91,54.87,54.31,53.97,53.56,53.03,52.58,52.62,52.53,52.7,53.12,52.97,52.92,52.91,52.64,52.41,52.02,51.61,51.23,51.15,50.93,50.93,50.93,50.92,50.83,50.71,50.44,50.21,50.11,49.81,49.72,49.58,49.5,49.4,49.31,49.25],"color":"#00ff00"},{"name":"Mangrove","data":[0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02],"color":"#687537"},{"name":"Flooded forest","data":[0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01],"color":"#76A5AF"},{"name":"Forest plantation","data":[0.25,0.26,0.28,0.4,0.41,0.44,0.54,0.58,0.58,0.6,0.6,0.59,0.59,0.59,0.59,0.58,0.59,0.59,0.59,0.6,0.62,0.65,0.69,0.72,0.77,0.81,0.86,0.89,0.93,0.95,0.96,0.98,0.99,1,1.04,1.06,1.06,1.07],"color":"#ad4413"},{"name":"Wetland","data":[0.06,0.06,0.06,0.05,0.05,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.06],"color":"#45C2A5"},{"name":"Grassland","data":[3.57,3.5,3.05,2.62,2.55,2.51,2.52,2.69,2.78,2.9,2.98,2.85,2.94,3.09,3.16,3.23,3.23,3.2,3.24,3.23,3.17,3.06,3.03,3.04,3.12,3.23,3.23,3.08,3.04,2.85,2.62,2.82,2.88,2.99,3.07,3.07,3.1,3.12],"color":"#B8AF4F"},{"name":"Other non forest formations","data":[0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01],"color":"#f1c232"},{"name":"Pasture","data":[18.17,18.3,19.33,20.27,21.11,21.76,22.5,23.09,23.63,23.85,24.01,24.15,24.33,24.57,24.74,25.02,25.31,25.53,25.9,26.12,26.37,26.5,26.76,27,27.07,27.06,27.21,27.42,27.8,28.16,28.31,28.32,28.22,27.92,27.75,27.43,27.01,26.72],"color":"#FFD966"},{"name":"Agriculture","data":[0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01],"color":"#e974ed"},{"name":"Temporary crop","data":[0.01,0.01,0.01,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.04,0.04,0.04,0.04,0.04,0.04,0.05,0.06,0.07,0.08,0.07,0.07,0.07,0.07,0.08],"color":"#D5A6BD"},{"name":"Sugar cane","data":[0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04],"color":"#C27BA0"},{"name":"Mosaic of uses","data":[12.71,12.68,12.16,11.58,11.44,11.1,10.72,10.55,10.46,10.24,10.13,9.98,9.26,9.09,8.9,8.62,8.6,8.57,8.56,8.64,8.75,8.77,8.68,8.32,8.14,8.02,7.85,7.86,7.81,7.79,7.96,7.9,7.95,8.2,8.32,8.6,9.09,9.28],"color":"#fff3bf"},{"name":"Non vegetated area","data":[0.16,0.16,0.16,0.15,0.15,0.16,0.16,0.16,0.16,0.16,0.17,0.17,0.18,0.18,0.19,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.21,0.21,0.21,0.21,0.22,0.23,0.23,0.23,0.2,0.21,0.21,0.21],"color":"#EA9999"},{"name":"Beach, dune and sand spot","data":[0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.04,0.04,0.03,0.03,0.03,0.03,0.03,0.03,0.04,0.03,0.04,0.03,0.03,0.03,0.03,0.03,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04],"color":"#DD7E6B"},{"name":"Urban area","data":[0.08,0.09,0.09,0.09,0.1,0.1,0.11,0.11,0.11,0.12,0.12,0.13,0.13,0.14,0.14,0.14,0.15,0.15,0.16,0.16,0.16,0.17,0.17,0.17,0.18,0.18,0.19,0.19,0.2,0.2,0.21,0.21,0.22,0.23,0.24,0.25,0.25,0.25],"color":"#aa0000"},{"name":"Other non vegetated areas","data":[0.47,0.43,0.38,0.34,0.31,0.32,0.33,0.34,0.33,0.32,0.32,0.31,0.29,0.28,0.28,0.28,0.27,0.29,0.29,0.29,0.31,0.3,0.31,0.32,0.33,0.33,0.32,0.33,0.34,0.33,0.34,0.35,0.38,0.39,0.35,0.34,0.32,0.33],"color":"#ff3d3d"},{"name":"Non observed","data":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"color":"#D5D5E5"},{"name":"Rocky outcrop","data":[0.77,0.79,0.79,0.79,0.79,0.79,0.79,0.79,0.79,0.79,0.79,0.79,0.79,0.78,0.79,0.8,0.8,0.8,0.8,0.8,0.8,0.8,0.8,0.8,0.8,0.8,0.8,0.79,0.79,0.79,0.79,0.81,0.81,0.81,0.83,0.83,0.83,0.83],"color":"#665a3a"},{"name":"Mining","data":[0,0,0,0,0,0,0,0,0,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01],"color":"#af2a2a"},{"name":"Aquaculture","data":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"color":"#02106f"},{"name":"Salt flat","data":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"color":"#968c46"},{"name":"River, lake and ocean","data":[0.94,0.97,0.94,0.99,1,1.06,1.04,1.03,0.98,0.97,0.92,0.89,0.93,0.86,0.83,0.8,0.79,0.83,0.84,1.04,1.02,1.02,1.03,1.03,1.02,0.98,0.96,0.9,0.76,0.72,0.65,0.65,0.64,0.65,0.7,0.82,0.76,0.86],"color":"#0000FF"},{"name":"Glacier","data":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"color":"#4FD3FF"},{"name":"Oil palm","data":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"color":"#BA6A27"},{"name":"Perennial crop","data":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"color":"#f3b4f1"},{"name":"Soybean","data":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.01,0.01,0.01,0.01,0.01,0,0,0.01,0.01,0.01,0.01,0.01,0.02,0.02,0.02,0.02,0.03,0.03,0.03,0.03,0.03,0.03],"color":"#e075ad"},{"name":"Rice","data":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"color":"#982c9e"},{"name":"Other temporary crops","data":[0.01,0.01,0.01,0.02,0.03,0.03,0.03,0.04,0.04,0.05,0.05,0.06,0.06,0.07,0.09,0.11,0.14,0.18,0.19,0.17,0.18,0.21,0.24,0.25,0.27,0.29,0.32,0.35,0.36,0.39,0.44,0.48,0.51,0.5,0.49,0.5,0.52,0.52],"color":"#e787f8"},{"name":"Open grassland","data":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"color":"#EBEBE0"},{"name":"Closed grassland","data":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"color":"#C2C2A3"},{"name":"Sparse grassland","data":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"color":"#6B6B47"},{"name":"Sparse natural woodlands","data":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"color":"#D0FFD0"},{"name":"Coffee","data":[0.03,0.03,0.03,0.03,0.03,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.04,0.04,0.04,0.05,0.05,0.05,0.05,0.05,0.05,0.05],"color":"#cca0d4"},{"name":"Citrus","data":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"color":"#d082de"},{"name":"Other perennial crops","data":[0.02,0.02,0.02,0.02,0.02,0.02,0.03,0.03,0.04,0.05,0.05,0.06,0.06,0.07,0.08,0.09,0.1,0.1,0.1,0.11,0.12,0.12,0.13,0.13,0.14,0.14,0.14,0.15,0.15,0.16,0.17,0.17,0.17,0.17,0.2,0.22,0.22,0.22],"color":"#cd49e4"},{"name":"Cotton","data":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"color":"#660066"}];
+const YEARS = [1985,1986,1987,1988,1989,1990,1991,1992,1993,1994,1995,1996,1997,1998,1999,2000,2001,2002,2003,2004,2005,2006,2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022];
+const ANTHROPIC_FIELDS = ["Anthropic","Forest plantation","Pasture","Agriculture","Temporary crop","Sugar cane","Mosaic of uses","Urban area","Mining","Aquaculture","Oil palm","Perennial crop","Soybean","Rice","Other temporary crops","Coffee","Citrus","Other perennial crops","Simple crop","Cotton"];
+const ANTHROPIC_SET = new Set(ANTHROPIC_FIELDS);
+
+const tip = document.getElementById('tip');
+function showTip(e, html) { tip.innerHTML = html; tip.style.opacity = 1; }
+document.addEventListener('mousemove', e => {
+  tip.style.left = (e.clientX + 14) + 'px';
+  tip.style.top  = (e.clientY - 10) + 'px';
+});
+function hideTip() { tip.style.opacity = 0; }
+
+function fmtRate(v) { return (v >= 0 ? '+' : '') + v.toFixed(3); }
+
+function drawTrendBars(selector, data, mode) {
+  const root = d3.select(selector);
+  root.selectAll('*').remove();
+
+  if (!data.length) {
+    root.append('p').style('color','#7d8590').style('font-size','11px').style('padding','8px').text('No data');
+    return;
+  }
+
+  const LABEL_W = 130;
+  const BAR_MAX = 110;
+  const VAL_W   = 46;
+  const W       = LABEL_W + BAR_MAX*2 + VAL_W;
+  const barH    = 15;
+  const gap     = 3;
+  const H       = data.length*(barH+gap) + 10;
+
+  const absMax  = d3.max(data, d => Math.abs(d.annualRate)) || 1;
+  const xSc     = d3.scaleLinear().domain([-absMax, absMax]).range([0, BAR_MAX*2]);
+  const zero    = xSc(0);
+
+  const svg = root.append('svg').attr('width',W).attr('height',H);
+
+  svg.append('line')
+    .attr('x1', LABEL_W + zero).attr('x2', LABEL_W + zero)
+    .attr('y1', 0).attr('y2', H)
+    .attr('stroke','#21262d').attr('stroke-width',1);
+
+  data.forEach((d,i) => {
+    const y   = i*(barH+gap);
+    const g   = svg.append('g').attr('transform','translate(0,'+y+')');
+    const bw  = Math.max(1, Math.abs(xSc(d.annualRate)-zero));
+    const bx  = d.annualRate < 0 ? LABEL_W + xSc(d.annualRate) : LABEL_W + zero;
+
+    let col;
+    if (mode === 'landUse') {
+      col = d.annualRate >= 0 ? '#cd3232' : '#3fb950';
+    } else {
+      col = d.annualRate >= 0 ? '#3fb950' : '#cd3232';
+    }
+
+    const lbl = d.class.length > 20 ? d.class.slice(0,19)+'…' : d.class;
+
+    g.append('text')
+      .attr('x', LABEL_W-6).attr('y', barH-3)
+      .attr('text-anchor','end')
+      .style('font-size','9px')
+      .style('fill','#7d8590')
+      .text(lbl);
+
+    g.append('rect')
+      .attr('x', bx).attr('y', 1)
+      .attr('width', bw).attr('height', barH-2)
+      .attr('rx', 2)
+      .attr('fill', col)
+      .attr('opacity', 0.82)
+      .style('cursor','pointer')
+      .on('mousemove', e => showTip(
+        e,
+        '<b>'+d.class+'</b><br>annual rate: '+fmtRate(d.annualRate)+' km² yr⁻¹'
+      ))
+      .on('mouseleave', hideTip);
+
+    g.append('text')
+      .attr('x', LABEL_W + BAR_MAX*2 + 4).attr('y', barH-3)
+      .style('font-size','9px')
+      .style('fill', col)
+      .text(fmtRate(d.annualRate));
+  });
+}
+
+function filterSpeciesTrendData(data, mode) {
+  const out = (data || []).filter(d => {
+    const isLandUse = ANTHROPIC_SET.has(d.class);
+    return mode === 'landUse' ? isLandUse : !isLandUse;
+  });
+
+  if (mode === 'landUse') {
+    out.sort((a,b) => b.annualRate - a.annualRate); // positivos em cima
+  } else {
+    out.sort((a,b) => a.annualRate - b.annualRate); // negativos em cima
+  }
+
+  return out;
+}
+
+function pieDataForYear(series, year) {
+  const idx = year - 1985;
+  if (!series || !series.length || idx < 0) return [];
+  return series
+    .map(s => ({
+      name: s.name,
+      value: Number(s.data[idx] ?? 0),
+      color: s.color || '#999999'
+    }))
+    .filter(d => isFinite(d.value) && d.value > 0);
+}
+
+function drawPie(selector, data, title) {
+  const root = d3.select(selector);
+  root.selectAll('*').remove();
+
+  if (!data.length) {
+    root.append('p').style('color','#7d8590').style('font-size','11px').style('padding','8px').text('No data');
+    return;
+  }
+
+  const W = 420, H = 320, R = 105, r = 0;
+  const svg = root.append('svg').attr('width', W).attr('height', H);
+  const g = svg.append('g').attr('transform', 'translate(130,160)');
+
+  const pie = d3.pie().value(d => d.value).sort(null);
+  const arc = d3.arc().innerRadius(r).outerRadius(R);
+
+  g.selectAll('path').data(pie(data)).join('path')
+    .attr('d', arc)
+    .attr('fill', d => d.data.color)
+    .attr('stroke', '#0d1117')
+    .attr('stroke-width', 1.2)
+    .style('cursor','pointer')
+    .on('mousemove', (e,d) => showTip(
+      e,
+      '<b>'+d.data.name+'</b><br>'+d.data.value.toFixed(2)+'%'
+    ))
+    .on('mouseleave', hideTip);
+
+  const lg = svg.append('g').attr('transform','translate(255,24)');
+  data.slice(0, 12).forEach((d,i) => {
+    const row = lg.append('g').attr('transform','translate(0,'+(i*20)+')');
+    row.append('rect').attr('width',10).attr('height',10).attr('rx',2).attr('fill',d.color);
+    row.append('text').attr('x',15).attr('y',9).style('font-size','9px').style('fill','#7d8590')
+      .text((d.name.length > 24 ? d.name.slice(0,23)+'…' : d.name) + ' ' + d.value.toFixed(1) + '%');
+  });
+}
+
+function populateYears(selectId) {
+  const sel = document.getElementById(selectId);
+  sel.innerHTML = '';
+  YEARS.forEach(y => {
+    const opt = document.createElement('option');
+    opt.value = y;
+    opt.textContent = y;
+    sel.appendChild(opt);
+  });
+  sel.value = YEARS[YEARS.length - 1];
+}
+
+function redrawPies() {
+  const yearAoo = Number(document.getElementById('year-aoo').value);
+  const yearEoo = Number(document.getElementById('year-eoo').value);
+
+  drawPie('#pie-aoo', pieDataForYear(STACKED_AOO, yearAoo), 'AOO');
+  drawPie('#pie-eoo', pieDataForYear(STACKED_EOO, yearEoo), 'EOO');
+}
+
+let speciesTrendMode = 'landCover';
+
+function redrawSpeciesClassCharts() {
+  const aooData = filterSpeciesTrendData(TREND_AOO, speciesTrendMode);
+  const eooData = filterSpeciesTrendData(TREND_EOO, speciesTrendMode);
+
+  drawTrendBars('#trend-aoo', aooData, speciesTrendMode);
+  drawTrendBars('#trend-eoo', eooData, speciesTrendMode);
+}
+
+document.getElementById('btn-species-land-cover').addEventListener('click', function(){
+  speciesTrendMode = 'landCover';
+  this.className = 'active';
+  this.style.background = 'var(--surface2)';
+  this.style.color = 'var(--text)';
+  this.style.borderColor = 'var(--accent2)';
+
+  const other = document.getElementById('btn-species-land-use');
+  other.className = '';
+  other.style.background = 'none';
+  other.style.color = 'var(--muted)';
+  other.style.borderColor = 'var(--border)';
+
+  redrawSpeciesClassCharts();
+});
+
+document.getElementById('btn-species-land-use').addEventListener('click', function(){
+  speciesTrendMode = 'landUse';
+  this.className = 'active';
+  this.style.background = 'var(--surface2)';
+  this.style.color = 'var(--text)';
+  this.style.borderColor = 'var(--accent2)';
+
+  const other = document.getElementById('btn-species-land-cover');
+  other.className = '';
+  other.style.background = 'none';
+  other.style.color = 'var(--muted)';
+  other.style.borderColor = 'var(--border)';
+
+  redrawSpeciesClassCharts();
+});
+
+document.getElementById('btn-species-land-cover').style.background = 'var(--surface2)';
+document.getElementById('btn-species-land-cover').style.color = 'var(--text)';
+document.getElementById('btn-species-land-cover').style.borderColor = 'var(--accent2)';
+
+redrawSpeciesClassCharts();
+
+populateYears('year-aoo');
+populateYears('year-eoo');
+document.getElementById('year-aoo').addEventListener('change', redrawPies);
+document.getElementById('year-eoo').addEventListener('change', redrawPies);
+redrawPies();
+</script>
+</body>
+</html>
